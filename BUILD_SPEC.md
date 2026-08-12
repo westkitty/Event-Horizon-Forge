@@ -1,9 +1,9 @@
-# Event Horizon Forge — Authoritative Build Contract
+# Event Horizon Forge — Build Contract Entry Point
 
 **Canonical repository:** `https://github.com/westkitty/Event-Horizon-Forge.git`  
 **Canonical branch:** `main`
 
-This file is the repository entry point for the complete Event Horizon Forge implementation contract. The contract is intentionally split across five ordered Markdown files so coding agents can load it without truncating one large document.
+This repository is intentionally prepared at the **governance/specification stage**, before package scaffolding and renderer architecture are locked. The full, executable Event Horizon Forge master build contract is supplied to the implementation agent as the task prompt/artifact. When that master contract is supplied, it governs implementation together with `OPERATIONAL_STATE.md`.
 
 ## Highest-priority product invariant
 
@@ -13,28 +13,44 @@ Normal immersive playback must not depend on a persistent dashboard, telemetry H
 
 A build that needs production users to keep a developer panel, permanent HUD, or conventional dashboard open for the main loop fails this contract even if the graphics are excellent.
 
-## Required reading order
+## Required reading order before implementation
 
-Read every file below before substantive implementation. Together they are one controlling specification:
+1. `AGENTS.md`
+2. `OPERATIONAL_STATE.md`
+3. this file
+4. `docs/experience-contract.md`
+5. `docs/research-benchmarks.md`
+6. the supplied **Event Horizon Forge — Master AI Build Contract**
+7. only then inspect/create package, renderer, simulation, and source architecture.
 
-1. [`docs/spec/01-product-simulation.md`](docs/spec/01-product-simulation.md) — executor contract, product thesis, shared model, scale/time architecture, formation/plasma/black-hole systems.
-2. [`docs/spec/02-rendering-space.md`](docs/spec/02-rendering-space.md) — renderer, star field, volumetrics, plasma, lensing, tidal rendering, post-processing.
-3. [`docs/spec/03-experience-interaction.md`](docs/spec/03-experience-interaction.md) — camera, director, direct manipulation, invisible UI, Time Lens, Branch Ghost, Causal Trace, Cosmic Hand, Magnetic Loom, Scale Dive, Silent Watch, accessibility/audio.
-4. [`docs/spec/04-architecture-gates.md`](docs/spec/04-architecture-gates.md) — application/GPU architecture, save/replay, capability tiers, responsive behavior, fidelity ledger, benchmarks, prototype gate.
-5. [`docs/spec/05-implementation-qa-delivery.md`](docs/spec/05-implementation-qa-delivery.md) — phases, testing, Git workflow, documentation, deployment, acceptance criteria, prohibited shortcuts, failure limits, delivery and definition of done.
+If the supplied task includes the full master build contract and `docs/master-build-contract.md` does not yet exist, persist an exact or semantically lossless Markdown copy there **before substantive implementation** so the repository remains restartable without chat history. Do not replace it later with a short summary.
 
-Also read before implementation:
+## Prototype gate first
+
+Do **not** begin by building the entire product. The first implementation milestone is the bounded Gate 0 representative slice defined by the master build contract. It must falsify the risky assumptions before production expansion, including:
+
+- renderer/capability path;
+- scene-native direct manipulation;
+- high-count particles/volumetric matter;
+- plasma + movable magnetic structures;
+- black-hole lensing and incoming-body deformation;
+- free camera and semantic scale travel;
+- checkpoint/rewind;
+- hidden-UI/zero-chrome success path;
+- resource lifecycle and representative performance.
+
+A spinning model, static black-hole shader, shader gallery, or dashboard-controlled demo is insufficient evidence.
+
+## Repository protections
+
+Preserve unless a later explicit user instruction supersedes them:
 
 - `AGENTS.md`
+- `BUILD_SPEC.md`
 - `OPERATIONAL_STATE.md`
+- `docs/experience-contract.md`
 - `docs/research-benchmarks.md`
+- canonical `origin` = `https://github.com/westkitty/Event-Horizon-Forge.git`
+- canonical branch = `main`
 
-## Authority
-
-The five ordered spec files are the authoritative implementation prompt. `BUILD_SPEC.md` is an index and invariant lock, not a substitute summary. If a later implementation document conflicts with them, follow the newest explicit user instruction first, then `OPERATIONAL_STATE.md`, then this contract.
-
-## First engineering action
-
-Do **not** begin by building the entire product. Execute the bounded prototype gate in Section 39 (`docs/spec/04-architecture-gates.md`). Its purpose is to falsify the risky assumptions—renderer/capability path, scene-native interaction, volumetrics/particles, black-hole lensing, checkpoint rewind, free camera and zero-chrome user path—before production architecture expands.
-
-Do not mark production readiness from a pretty static scene or unmeasured desktop demo.
+Do not force-push, silently replace `origin`, create a replacement repository, or mark runtime features verified from source-code presence alone.
