@@ -7,7 +7,8 @@ The project is intentionally designed so that **the universe itself is the inter
 ## Start here
 
 - `AGENTS.md` — implementation-agent entry point and protected invariants.
-- `BUILD_SPEC.md` — authoritative master build contract.
+- `BUILD_SPEC.md` — build-contract index and critical invariant.
+- `docs/spec/01-product-simulation.md` through `04-qa-delivery.md` — complete authoritative build contract, read in order.
 - `OPERATIONAL_STATE.md` — current verified/unverified/broken/pending project state.
 - `docs/research-benchmarks.md` — current reference projects and what Event Horizon Forge should learn from or outperform.
 
@@ -15,4 +16,4 @@ The project is intentionally designed so that **the universe itself is the inter
 
 Repository bootstrap/specification stage. No runtime implementation is claimed complete yet.
 
-The first engineering milestone is the bounded prototype gate defined in `BUILD_SPEC.md`.
+The first engineering milestone is the bounded prototype gate defined in the build contract.
