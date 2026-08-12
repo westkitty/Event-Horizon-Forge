@@ -7,13 +7,15 @@ The project is intentionally designed so that **the universe itself is the inter
 ## Start here
 
 - `AGENTS.md` — implementation-agent entry point and protected invariants.
-- `BUILD_SPEC.md` — build-contract index and critical invariant.
-- `docs/spec/01-product-simulation.md` through `04-qa-delivery.md` — complete authoritative build contract, read in order.
 - `OPERATIONAL_STATE.md` — current verified/unverified/broken/pending project state.
-- `docs/research-benchmarks.md` — current reference projects and what Event Horizon Forge should learn from or outperform.
+- `BUILD_SPEC.md` — repository build-contract entry point and prototype-gate rules.
+- `docs/experience-contract.md` — screen-first interaction law: direct manipulation, hidden UI, camera/time/branch experience.
+- `docs/research-benchmarks.md` — current comparator research and what Event Horizon Forge should outperform.
+
+The complete **Event Horizon Forge — Master AI Build Contract** is supplied to the implementation agent as the build task. The agent must persist that contract into the repository before substantive coding, as directed by `BUILD_SPEC.md`, so the project remains restartable without chat history.
 
 ## Current state
 
 Repository bootstrap/specification stage. No runtime implementation is claimed complete yet.
 
-The first engineering milestone is the bounded prototype gate defined in the build contract.
+The first engineering milestone is the bounded Gate 0 representative prototype. Dependency versions and renderer architecture are intentionally not pre-locked until that gate inspects current official tooling and proves the risky browser/graphics assumptions.
