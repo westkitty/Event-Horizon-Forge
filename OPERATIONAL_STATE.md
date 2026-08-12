@@ -9,7 +9,7 @@
     "state": "current-baseline"
   },
   "delivery_state": "repository-bootstrap",
-  "last_updated": "2026-08-12T09:27:59Z",
+  "last_updated": "2026-08-12T09:35:45Z",
   "linked_parent_state": null,
   "primary_artifact": "BUILD_SPEC.md",
   "project_id": "event-horizon-forge",
@@ -20,7 +20,7 @@
     "Canonical repository westkitty/Event-Horizon-Forge",
     "Browser-first Event Horizon Forge simulation and its governing build contract"
   ],
-  "state_revision": 2,
+  "state_revision": 3,
   "target_environment": "browser-first TypeScript/Three.js candidate, final renderer path gated by prototype evidence"
 }
 -->
@@ -38,7 +38,7 @@
 
 ## 2. Current Baseline
 
-- **Primary artifact:** `BUILD_SPEC.md` plus the ordered files under `docs/spec/`.
+- **Primary artifact:** `BUILD_SPEC.md` plus the master build prompt supplied for implementation.
 - **Baseline state:** `current-baseline` — repository bootstrap/specification stage.
 - **Source/build/install identity:** `westkitty/Event-Horizon-Forge` `main`; runtime source tree not yet implemented.
 - **Active default user route:** Not implemented; required future route is immediate immersive scene entry with no dashboard tax.
@@ -47,9 +47,11 @@
 
 ## 3. Artifact Contract
 
-Build the browser-first Event Horizon Forge simulation defined by `BUILD_SPEC.md` and its ordered `docs/spec/` files. The rendered universe must remain the primary interaction surface; formation, plasma/magnetic manipulation, instability, black-hole interaction, camera, time, rewind, branching, comparison, save, and provenance must form one coherent system. Runtime completion requires evidence from the prototype gate and subsequent acceptance tests.
+Build the browser-first Event Horizon Forge simulation defined by `BUILD_SPEC.md`. The rendered universe must remain the primary interaction surface; formation, plasma/magnetic manipulation, instability, black-hole interaction, camera, time, rewind, branching, comparison, save, and provenance must form one coherent system. Runtime completion requires evidence from the prototype gate and subsequent acceptance tests.
 
 ## 4. Active Invariants
+
+Add stable `INV-###` entries for rules future work must preserve.
 
 <!-- operational-state:entry
 {
@@ -109,21 +111,53 @@ Build the browser-first Event Horizon Forge simulation defined by `BUILD_SPEC.md
 
 ## 5. Verified Working Behavior
 
-No runtime behavior is verified yet.
+Add stable `VER-###` entries only when evidence proves the required behavior through an appropriate path.
+
+<!-- operational-state:entry
+{
+  "artifact_revision": "main bootstrap 2026-08-12",
+  "capability": "The canonical main branch contains the governing entry files and screen-first/research documentation required before the implementation agent begins Gate 0.",
+  "dependencies": "GitHub repository availability",
+  "evidence": "README.md; AGENTS.md; BUILD_SPEC.md; OPERATIONAL_STATE.md; .gitignore; docs/experience-contract.md; docs/research-benchmarks.md on westkitty/Event-Horizon-Forge main",
+  "freshness": "Current at revision 3",
+  "id": "VER-001",
+  "last_verified": "2026-08-12",
+  "recheck_trigger": "Any deletion, rename, governing-file rewrite, or canonical branch/remote change",
+  "scope": "Repository bootstrap only; excludes runtime implementation",
+  "state": "verified",
+  "title": "Canonical repository governance bootstrap is present",
+  "verification_method": "GitHub connector read of repository root and docs directory after writes"
+}
+-->
+### VER-001 — Canonical repository governance bootstrap is present
+
+- **State:** `verified`
+- **Artifact Revision:** main bootstrap 2026-08-12
+- **Capability:** The canonical main branch contains the governing entry files and screen-first/research documentation required before the implementation agent begins Gate 0.
+- **Dependencies:** GitHub repository availability
+- **Evidence:** README.md; AGENTS.md; BUILD_SPEC.md; OPERATIONAL_STATE.md; .gitignore; docs/experience-contract.md; docs/research-benchmarks.md on westkitty/Event-Horizon-Forge main
+- **Freshness:** Current at revision 3
+- **Last Verified:** 2026-08-12
+- **Recheck Trigger:** Any deletion, rename, governing-file rewrite, or canonical branch/remote change
+- **Scope:** Repository bootstrap only; excludes runtime implementation
+- **Verification Method:** GitHub connector read of repository root and docs directory after writes
+<!-- /operational-state:entry -->
 
 ## 6. Known Not Working
 
-No runtime failure has been established because the runtime is not implemented yet.
+Add stable `BRK-###` entries for confirmed failures. Keep them until repair evidence exists.
 
 ## 7. Implemented but Unverified
 
-No runtime implementation is claimed yet.
+Add stable `UNV-###` entries for code, files, configuration, or artifact features that exist but are not proven through the required user journey.
 
 ## 8. Unknown or Evidence-Stale State
 
-Renderer performance, device/browser coverage, rewind cost, lensing performance, volumetric performance, and interaction feel remain unknown until Gate 0 executes.
+Add stable `UNK-###` entries for missing, conflicting, inaccessible, stale, or invalidated evidence.
 
 ## 9. Pending Work
+
+Add stable `PND-###` entries for intentionally incomplete work. Pending does not automatically mean failed.
 
 <!-- operational-state:entry
 {
@@ -150,6 +184,8 @@ Renderer performance, device/browser coverage, rewind cost, lensing performance,
 <!-- /operational-state:entry -->
 
 ## 10. Active Decisions, Defaults, and Prohibitions
+
+Add stable `DEC-###` entries for source locks, routes, naming, packaging, style, rejected approaches, environment limits, and explicit supersessions.
 
 <!-- operational-state:entry
 {
@@ -209,11 +245,23 @@ Renderer performance, device/browser coverage, rewind cost, lensing performance,
 ### Revision 2 — 2026-08-12T09:27:59Z
 
 - **Artifact/source identity:** westkitty/Event-Horizon-Forge main bootstrap
-- **State deltas:** Established canonical repository, project purpose, screen-first invariant, cross-domain invariant, Gate 0 pending work, and Git protections.
-- **New evidence:** Canonical repository confirmed as https://github.com/westkitty/Event-Horizon-Forge; repository bootstrap stage; no runtime implementation verified.
+- **State deltas:** Updated metadata: project_root, current_baseline, scope_boundaries, primary_artifact, delivery_state, target_environment; Added INV-001 to 4. Active Invariants; Added INV-002 to 4. Active Invariants; Added PND-001 to 9. Pending Work; Added DEC-001 to 10. Active Decisions, Defaults, and Prohibitions
+- **New evidence:** Canonical repository confirmed as https://github.com/westkitty/Event-Horizon-Forge; Repository bootstrap stage; no runtime implementation verified; Master build contract exists at BUILD_SPEC.md
 - **Newly verified behavior:** None.
 - **Newly known failure:** None.
 - **Superseded rule:** None.
-- **Validation not performed:** No runtime simulation exists yet; no browser/device performance claims verified yet.
+- **Validation not performed:** No runtime simulation exists yet; No browser/device performance claims verified yet
 - **Reason for broad revalidation:** Not applicable.
-- **Summary:** Bootstrap canonical repository governance and protect the screen-first interaction contract.
+- **Summary:** Bootstrap canonical repository governance and protect the screen-first interaction contract
+
+### Revision 3 — 2026-08-12T09:35:45Z
+
+- **Artifact/source identity:** westkitty/Event-Horizon-Forge main governance bootstrap 2026-08-12
+- **State deltas:** Added VER-001 to 5. Verified Working Behavior
+- **New evidence:** GitHub main contains README.md, AGENTS.md, BUILD_SPEC.md, OPERATIONAL_STATE.md, .gitignore; GitHub docs contains experience-contract.md and research-benchmarks.md; No runtime application is present or claimed
+- **Newly verified behavior:** VER-001
+- **Newly known failure:** None.
+- **Superseded rule:** None.
+- **Validation not performed:** No Gate 0 runtime yet; No browser/device performance evidence yet
+- **Reason for broad revalidation:** Not applicable.
+- **Summary:** Verify repository governance bootstrap and screen-first experience documentation
