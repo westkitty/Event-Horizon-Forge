@@ -1,32 +1,54 @@
 /**
- * Entry point. No title screen, no "Start Simulation" gate (BUILD_SPEC 2.13):
- * boot straight into a living scene as soon as the renderer and the essential
- * assets are ready, and remove the boot surface from the viewport entirely.
+ * Entry point. Boot straight into the living scene; the loader exists only
+ * while renderer/simulation prerequisites are being prepared.
  */
 
 import { App } from './app/App';
+import type { PersistentAction } from './ui/Overlay';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 const overlayRoot = document.getElementById('overlay') as HTMLElement;
 const boot = document.getElementById('boot') as HTMLElement;
 const bootBar = document.getElementById('boot-bar') as HTMLElement;
+const bootProgress = document.getElementById('boot-progress') as HTMLElement;
 const bootWhy = document.getElementById('boot-why') as HTMLElement;
 
 const debug = new URLSearchParams(location.search).has('debug');
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 const app = new App({
   canvas,
   overlayRoot,
   debug,
   onBootProgress: (fraction, note) => {
-    bootBar.style.width = `${Math.round(fraction * 100)}%`;
+    const percent = Math.round(Math.max(0, Math.min(1, fraction)) * 100);
+    bootBar.style.width = `${percent}%`;
+    bootProgress.setAttribute('aria-valuenow', String(percent));
     bootWhy.textContent = note;
   },
 });
 
-// Exposed for the Playwright suite and for the Gate 0 evidence capture. This is
-// a test/debug seam, not production UI: nothing here draws to the screen.
+const PERSISTENT_ACTIONS: PersistentAction[] = [
+  { id: 'pause', label: 'Pause', hint: 'Pause or resume simulation' },
+  { id: 'rewind', label: 'Back', hint: 'Step backward through reconstructed time' },
+  { id: 'fork', label: 'Fork', hint: 'Fork a counterfactual branch' },
+  { id: 'swap', label: 'Swap', hint: 'Swap active and comparison branches', disabled: true },
+  { id: 'clean', label: 'Clean', hint: 'Dismiss transient instruments' },
+];
+
+const ACTION_KEYS: Record<string, string> = {
+  pause: 'KeyK',
+  rewind: 'KeyJ',
+  fork: 'KeyY',
+  swap: 'KeyX',
+  clean: 'KeyH',
+};
+
 declare global {
+  interface WindowEventMap {
+    'ehf:toggle-persistent-controls': CustomEvent<void>;
+  }
+
   interface Window {
     __EHF__?: {
       app: App;
@@ -34,20 +56,77 @@ declare global {
       perf: () => ReturnType<App['perfSummary']>;
       capabilities: () => unknown;
       tick: () => number;
-      /** Test seam: drives frames explicitly (headless rAF is throttled). */
       stepFrames: (n: number) => void;
-      /** Test seam: advances simulation only, no rendering. */
       stepSim: (n: number) => void;
-      /** Test seam: offscreen render + pixel readback for visual QA. */
       capture: (w?: number, h?: number) => Promise<string>;
       ready: boolean;
     };
   }
 }
 
+function dismissBoot(): void {
+  if (!boot.isConnected) return;
+  if (reducedMotion.matches) {
+    boot.remove();
+    return;
+  }
+  boot.classList.add('gone');
+  window.setTimeout(() => boot.remove(), 460);
+}
+
+function dispatchSceneKey(code: string): void {
+  window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+  window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+}
+
+function refreshPersistentControls(): void {
+  const overlay = app.overlayRef;
+  overlay.updatePersistentControl('pause', {
+    label: app.timeController.paused ? 'Play' : 'Pause',
+    hint: app.timeController.paused ? 'Resume simulation' : 'Pause simulation',
+    pressed: app.timeController.paused,
+  });
+  overlay.updatePersistentControl('swap', { disabled: !app.branchManager.compare });
+}
+
+function configurePersistentControls(enabled: boolean): void {
+  app.overlayRef.setPersistentControls(enabled, PERSISTENT_ACTIONS, (id) => {
+    const code = ACTION_KEYS[id];
+    if (!code) return;
+    dispatchSceneKey(code);
+    refreshPersistentControls();
+  });
+  refreshPersistentControls();
+}
+
+function onPersistentToggle(): void {
+  const disabling = app.overlayRef.prefs.persistentControls;
+  const active = document.activeElement;
+  const focusWasInStrip = active instanceof HTMLElement && Boolean(active.closest('.ehf-strip'));
+  configurePersistentControls(!disabling);
+  if (disabling && focusWasInStrip) canvas.focus({ preventScroll: true });
+}
+
+function onInputStateKey(event: KeyboardEvent): void {
+  if (!app.overlayRef.prefs.persistentControls) return;
+  if (['Space', 'KeyK', 'KeyY', 'KeyX'].includes(event.code)) {
+    queueMicrotask(refreshPersistentControls);
+  }
+}
+
+function syncReducedMotion(): void {
+  app.cameraRef.reducedMotion = reducedMotion.matches;
+}
+
 app
   .init()
   .then(() => {
+    syncReducedMotion();
+    configurePersistentControls(app.overlayRef.prefs.persistentControls);
+    window.addEventListener('ehf:toggle-persistent-controls', onPersistentToggle);
+    window.addEventListener('keyup', onInputStateKey);
+    reducedMotion.addEventListener('change', syncReducedMotion);
+
     app.start();
 
     window.__EHF__ = {
@@ -59,8 +138,6 @@ app
       stepFrames: (n: number) => app.stepFramesForTest(n),
       stepSim: (n: number) => app.stepSimForTest(n),
       capture: async (w?: number, h?: number) => {
-        // Base64, not a number[]: a 800x500 readback is 1.6M entries and
-        // serialising that over CDP as JSON crashes the page.
         const px = await app.captureFrameForTest(w, h);
         let s = '';
         for (let i = 0; i < px.length; i += 8192) {
@@ -71,38 +148,46 @@ app
       ready: true,
     };
 
-    // Let one frame land before dissolving the boot surface, so the user never
-    // sees a black gap between the loader and the scene.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        boot.classList.add('gone');
-        setTimeout(() => boot.remove(), 1000);
-      });
-    });
+    requestAnimationFrame(() => requestAnimationFrame(dismissBoot));
 
     if (debug) {
-      // Debug instrumentation is available only behind the flag (39.1.15).
       const el = document.createElement('div');
       el.style.cssText =
         'position:fixed;top:8px;left:8px;z-index:50;font:11px ui-monospace,monospace;' +
         'color:#7dd3fc;background:rgba(0,0,0,.65);padding:6px 8px;border-radius:6px;' +
         'pointer-events:none;white-space:pre';
       document.body.appendChild(el);
-      setInterval(() => {
+      const timer = window.setInterval(() => {
         const p = app.perfSummary();
         const caps = app.capabilities;
         el.textContent = p
           ? `tier ${caps.tier}  median ${p.median.toFixed(1)}ms  p95 ${p.p95.toFixed(1)}ms\n` +
             `sim ${p.simMedian.toFixed(2)}ms  frames ${p.frames}  tick ${app.branchManager.active.state.tick}\n` +
             `chrome ${app.overlayRef.chromeCount()}`
-          : 'sampling…';
+          : 'sampling...';
       }, 500);
+      window.addEventListener('pagehide', () => window.clearInterval(timer), { once: true });
     }
   })
-  .catch((err) => {
-    // Never strand the user behind a blank canvas (25.15, 45).
-    boot.classList.remove('gone');
-    bootBar.style.width = '100%';
-    bootWhy.textContent = String(err?.message ?? err);
-    console.error('[EHF] initialisation failed', err);
+  .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!app.overlayRef.hasBlockingError()) {
+      app.overlayRef.showBlockingError(
+        'Event Horizon Forge could not start',
+        message || 'The simulation failed during startup.',
+        () => location.reload(),
+      );
+    }
+    console.error('[EHF] initialisation failed', error);
+    dismissBoot();
   });
+
+window.addEventListener(
+  'pagehide',
+  () => {
+    window.removeEventListener('ehf:toggle-persistent-controls', onPersistentToggle);
+    window.removeEventListener('keyup', onInputStateKey);
+    reducedMotion.removeEventListener('change', syncReducedMotion);
+  },
+  { once: true },
+);

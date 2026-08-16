@@ -594,6 +594,7 @@ export class App {
       onManipulateMove: (x, y, dx, dy) => this.moveManipulation(x, y, dx, dy),
       onManipulateEnd: () => this.endManipulation(),
       onManipulateWheel: (d) => this.wheelManipulation(d),
+      onSelect: (t) => { this.selection = t; },
       onFocus: (t) => this.focusTarget(t),
       onToolWheel: (t, x, y) => this.openToolWheel(t, x, y),
       onTogglePause: () => this.time.togglePause(),
@@ -999,7 +1000,7 @@ export class App {
         };
       }
       case 'fieldNode': {
-        const nd = world.fieldNodes.find((n) => n.id === this.selection.kind === true ? '' : (this.selection as { id: string }).id);
+        const nd = world.fieldNodes.find((n) => n.id === this.selection.id);
         return {
           title: 'Field element',
           rows: [
@@ -1139,6 +1140,7 @@ export class App {
     this.disposed = true;
     this.stop();
     removeEventListener('resize', this.onResize);
+    this.renderer?.domElement.removeEventListener('webglcontextlost', this.onDeviceLost);
     this.input?.dispose();
     this.overlay.dispose();
     this.lens?.dispose();
@@ -1290,6 +1292,7 @@ const HELP_CONTENT = {
     { label: 'Hold I T C B G P', value: 'peek' },
     { label: 'F · Tab · R · V', value: 'focus · cycle · event · director' },
     { label: 'Y · X', value: 'fork · swap branch' },
+    { label: 'Shift+H', value: 'persistent controls' },
     { label: 'H · Esc', value: 'clean · dismiss' },
   ],
 };
