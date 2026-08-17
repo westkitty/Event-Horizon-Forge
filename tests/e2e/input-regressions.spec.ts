@@ -42,7 +42,8 @@ test('UI/input regressions: persistent controls, repeat guards, BFCache, and tou
   // Exercise the router directly so a one-finger scene manipulation escalating
   // to a two-finger camera gesture cannot leave App manipulation state stale.
   const touchLog = await page.evaluate(async () => {
-    const { InputRouter } = await import('/src/interaction/InputRouter.ts');
+    const moduleUrl = '/src/interaction/InputRouter.ts';
+    const { InputRouter } = await import(/* @vite-ignore */ moduleUrl);
     const target = document.createElement('div');
     document.body.appendChild(target);
     Object.defineProperty(target, 'setPointerCapture', { value: () => {} });
