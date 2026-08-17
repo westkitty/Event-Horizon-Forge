@@ -154,6 +154,9 @@ export class InputRouter {
 
     if (this.pointers.size === 2 && event.pointerType === 'touch') {
       this.clearLongPress();
+      // Escalating from a one-finger drag to a two-finger camera gesture must
+      // cancel the active app manipulation before the router changes phase.
+      if (this.phase.kind === 'manipulate') this.handlers.onEscape();
       const [a, b] = [...this.pointers.entries()];
       this.phase = {
         kind: 'touchCamera',
@@ -319,6 +322,7 @@ export class InputRouter {
     // Persistent Controls; all other UI-key input stays owned by that surface.
     if (event.code === 'KeyH' && event.shiftKey) {
       event.preventDefault();
+      if (event.repeat) return;
       window.dispatchEvent(new CustomEvent('ehf:toggle-persistent-controls'));
       return;
     }
@@ -476,14 +480,12 @@ export class InputRouter {
 }
 
 function isTextEntry(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  const tag = el.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable === true;
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable === true;
 }
 
 function isUiControl(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  return Boolean(el.closest('button, a[href], input, textarea, select, summary, [role="button"], [role="menuitem"], [role="toolbar"], [role="dialog"], [role="alertdialog"]'));
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest('button, a[href], input, textarea, select, summary, [role="button"], [role="menuitem"], [role="toolbar"], [role="dialog"], [role="alertdialog"]'));
 }

@@ -166,7 +166,11 @@ app
             `chrome ${app.overlayRef.chromeCount()}`
           : 'sampling...';
       }, 500);
-      window.addEventListener('pagehide', () => window.clearInterval(timer), { once: true });
+      window.addEventListener(
+        'pagehide',
+        (event) => { if (!event.persisted) window.clearInterval(timer); },
+        { once: true },
+      );
     }
   })
   .catch((error) => {
@@ -184,7 +188,10 @@ app
 
 window.addEventListener(
   'pagehide',
-  () => {
+  (event) => {
+    // A page entering the back/forward cache is frozen rather than destroyed.
+    // Keep page-lifetime listeners attached so they still work after restore.
+    if (event.persisted) return;
     window.removeEventListener('ehf:toggle-persistent-controls', onPersistentToggle);
     window.removeEventListener('keyup', onInputStateKey);
     reducedMotion.removeEventListener('change', syncReducedMotion);
