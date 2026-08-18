@@ -4,7 +4,7 @@
 {
   "artifact_path": "",
   "current_baseline": {
-    "identity": "main fa87d3e074f775a54ffc22adc2412787401063cf - Gate 0 prototype with UI/input regression repairs",
+    "identity": "runtime baseline fa87d3e074f775a54ffc22adc2412787401063cf - Gate 0 prototype with UI/input regression repairs; governance revision 5 applied on main",
     "last_verified": "2026-08-17",
     "state": "current-baseline"
   },
@@ -34,7 +34,7 @@
 
 ## 2. Current Baseline
 
-- **Current main:** `fa87d3e074f775a54ffc22adc2412787401063cf`.
+- **Runtime application baseline:** `fa87d3e074f775a54ffc22adc2412787401063cf`; revision 5 changes governance only and leaves runtime code unchanged.
 - **Built:** Gate 0 prototype plus the August 16 UI/UX polish and August 17 UI/input repairs.
 - **Verified:** governance, historical deterministic simulation-core evidence, and bounded direct-Chromium UI/input repairs.
 - **Unverified on current main:** full tests/typecheck/build/E2E, rendered imagery, real frame time/GPU timing, Tier B/C, Safari/Firefox/mobile, and human Gate 0 review.
@@ -371,7 +371,7 @@ No unresolved confirmed runtime defect is currently recorded after the bounded A
 <!-- operational-state:entry
 {
   "authority": "Explicit user instruction + verified GitHub metadata",
-  "evidence": "GitHub confirms repository, default branch main, write permission, and current main head fa87d3e074f775a54ffc22adc2412787401063cf.",
+  "evidence": "GitHub confirms repository, default branch main, write permission, and runtime baseline fa87d3e074f775a54ffc22adc2412787401063cf before governance revision 5.",
   "id": "DEC-001",
   "last_checked": "2026-08-18",
   "recheck_trigger": "Git workflow change",
@@ -387,7 +387,7 @@ No unresolved confirmed runtime defect is currently recorded after the bounded A
 
 - **State:** `current-baseline`
 - **Authority:** Explicit user instruction + verified GitHub metadata
-- **Evidence:** GitHub confirms repository, default branch main, write permission, and current main head fa87d3e074f775a54ffc22adc2412787401063cf.
+- **Evidence:** GitHub confirms repository, default branch main, write permission, and runtime baseline fa87d3e074f775a54ffc22adc2412787401063cf before governance revision 5.
 - **Last Checked:** 2026-08-18
 - **Recheck Trigger:** Git workflow change
 - **Rule:** Use https://github.com/westkitty/Event-Horizon-Forge.git with main. Do not replace the repo, silently change origin, force-push, or overwrite governance without evidence.
