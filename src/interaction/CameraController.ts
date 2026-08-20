@@ -14,7 +14,7 @@
  * the user approaches a focus target.
  */
 
-import { PerspectiveCamera, Quaternion, Vector3 } from 'three/webgpu';
+import { Matrix4, PerspectiveCamera, Quaternion, Vector3 } from 'three/webgpu';
 import {
   SCALE_FRAMES,
   detailFrameFor,
@@ -45,6 +45,11 @@ function dampAngle(current: number, target: number, lambda: number, dt: number):
   return current + delta * (1 - Math.exp(-lambda * dt));
 }
 
+const UP = new Vector3(0, 1, 0);
+const ALT_UP = new Vector3(0, 0, 1);
+const ZERO = new Vector3(0, 0, 0);
+const VELOCITY_EPSILON = 1e-8;
+
 export class CameraController {
   readonly camera: PerspectiveCamera;
 
@@ -71,6 +76,9 @@ export class CameraController {
 
   private frame: ScaleFrame = SCALE_FRAMES[0];
   private gravitationalRadius = 1;
+  private relativisticFrame: ScaleFrame;
+  private detailFrame: ScaleFrame;
+  private readonly frameCandidates: ScaleFrame[];
 
   /** Recent focus anchors for back/forward traversal (22.6). */
   private history: FocusAnchor[] = [];
@@ -79,16 +87,43 @@ export class CameraController {
   /** Free-flight velocity in metres/second of scenario-independent real time. */
   private flyVelocity: Vec3 = [0, 0, 0];
 
+  // Hot-path scratch objects. Camera update and idle flight run every frame, so
+  // they must not create transient Three.js objects and feed the garbage collector.
+  private readonly scratchRight = new Vector3();
+  private readonly scratchUp = new Vector3();
+  private readonly scratchForward = new Vector3();
+  private readonly scratchLook = new Vector3();
+  private readonly scratchQuaternion = new Quaternion();
+  private readonly scratchMatrix = new Matrix4();
+
   reducedMotion = false;
 
   constructor(aspect: number) {
     this.camera = new PerspectiveCamera(58, aspect, 0.01, 1e6);
     this.camera.position.set(0, 0, 0);
     this.camera.matrixAutoUpdate = false;
+
+    this.relativisticFrame = relativisticFrameFor(this.gravitationalRadius);
+    this.detailFrame = detailFrameFor(this.gravitationalRadius);
+    this.frameCandidates = [
+      SCALE_FRAMES[0],
+      SCALE_FRAMES[1],
+      SCALE_FRAMES[2],
+      this.relativisticFrame,
+      this.detailFrame,
+    ];
   }
 
   setGravitationalRadius(rg: number): void {
-    this.gravitationalRadius = Math.max(1, rg);
+    const next = Math.max(1, rg);
+    const scale = Math.max(1, this.gravitationalRadius, next);
+    if (Math.abs(next - this.gravitationalRadius) / scale < 1e-12) return;
+
+    this.gravitationalRadius = next;
+    this.relativisticFrame = relativisticFrameFor(next);
+    this.detailFrame = detailFrameFor(next);
+    this.frameCandidates[3] = this.relativisticFrame;
+    this.frameCandidates[4] = this.detailFrame;
   }
 
   get activeFrame(): ScaleFrame {
@@ -121,41 +156,58 @@ export class CameraController {
 
   /** Free flight. `axis` is right/up/forward in [-1,1]; speed scales with frame. */
   fly(axis: Vec3, dt: number, boost: number): void {
-    if (axis[0] === 0 && axis[1] === 0 && axis[2] === 0) {
-      // Damp residual velocity so releasing the key coasts to a stop.
+    const hasInput = axis[0] !== 0 || axis[1] !== 0 || axis[2] !== 0;
+
+    if (!hasInput) {
+      // Damp residual velocity so releasing the key coasts to a stop. Avoid the
+      // camera-basis work entirely once there is no meaningful residual motion.
       const k = Math.exp(-6 * dt);
       this.flyVelocity[0] *= k;
       this.flyVelocity[1] *= k;
       this.flyVelocity[2] *= k;
+
+      const speed2 =
+        this.flyVelocity[0] * this.flyVelocity[0] +
+        this.flyVelocity[1] * this.flyVelocity[1] +
+        this.flyVelocity[2] * this.flyVelocity[2];
+      if (speed2 < VELOCITY_EPSILON * VELOCITY_EPSILON) {
+        this.flyVelocity[0] = 0;
+        this.flyVelocity[1] = 0;
+        this.flyVelocity[2] = 0;
+        return;
+      }
     } else {
       this.manualInputThisFrame = true;
       this.intent = 'fly';
-    }
 
-    // Speed is proportional to the current viewing distance, which is what
-    // makes travel feel identical at every scale.
-    const speed = this.smoothDistance * 0.9 * boost;
-    const q = this.camera.quaternion;
-    const right = new Vector3(1, 0, 0).applyQuaternion(q);
-    const up = new Vector3(0, 1, 0).applyQuaternion(q);
-    const fwd = new Vector3(0, 0, -1).applyQuaternion(q);
+      // Speed is proportional to the current viewing distance, which is what
+      // makes travel feel identical at every scale.
+      const speed = this.smoothDistance * 0.9 * boost;
+      const q = this.camera.quaternion;
+      const right = this.scratchRight.set(1, 0, 0).applyQuaternion(q);
+      const up = this.scratchUp.set(0, 1, 0).applyQuaternion(q);
+      const fwd = this.scratchForward.set(0, 0, -1).applyQuaternion(q);
 
-    const ax = right.x * axis[0] + up.x * axis[1] + fwd.x * axis[2];
-    const ay = right.y * axis[0] + up.y * axis[1] + fwd.y * axis[2];
-    const az = right.z * axis[0] + up.z * axis[1] + fwd.z * axis[2];
+      const ax = right.x * axis[0] + up.x * axis[1] + fwd.x * axis[2];
+      const ay = right.y * axis[0] + up.y * axis[1] + fwd.y * axis[2];
+      const az = right.z * axis[0] + up.z * axis[1] + fwd.z * axis[2];
 
-    const accel = speed * 4;
-    this.flyVelocity[0] += ax * accel * dt;
-    this.flyVelocity[1] += ay * accel * dt;
-    this.flyVelocity[2] += az * accel * dt;
+      const accel = speed * 4;
+      this.flyVelocity[0] += ax * accel * dt;
+      this.flyVelocity[1] += ay * accel * dt;
+      this.flyVelocity[2] += az * accel * dt;
 
-    const vmax = speed;
-    const v = Math.hypot(...this.flyVelocity);
-    if (v > vmax) {
-      const s = vmax / v;
-      this.flyVelocity[0] *= s;
-      this.flyVelocity[1] *= s;
-      this.flyVelocity[2] *= s;
+      const v2 =
+        this.flyVelocity[0] * this.flyVelocity[0] +
+        this.flyVelocity[1] * this.flyVelocity[1] +
+        this.flyVelocity[2] * this.flyVelocity[2];
+      const vmax2 = speed * speed;
+      if (v2 > vmax2) {
+        const s = speed / Math.sqrt(v2);
+        this.flyVelocity[0] *= s;
+        this.flyVelocity[1] *= s;
+        this.flyVelocity[2] *= s;
+      }
     }
 
     // Flight moves the focus point; the camera keeps its orbit offset, so
@@ -225,7 +277,10 @@ export class CameraController {
       this.smoothTarget[i] = damp(this.smoothTarget[i], this.target[i], lambda, dt);
     }
 
-    this.frame = this.selectFrame(this.smoothDistance);
+    const nextFrame = this.selectFrame(this.smoothDistance);
+    const projectionChanged =
+      nextFrame.near !== this.camera.near || nextFrame.far !== this.camera.far;
+    this.frame = nextFrame;
 
     const cp = Math.cos(this.smoothPitch);
     const offX = Math.sin(this.smoothYaw) * cp * this.smoothDistance;
@@ -239,17 +294,19 @@ export class CameraController {
     // The camera sits at the render origin looking back at the focus point,
     // which in render space is simply -offset / metresPerUnit.
     const inv = 1 / this.frame.metresPerUnit;
-    const look = new Vector3(-offX * inv, -offY * inv, -offZ * inv);
+    const look = this.scratchLook.set(-offX * inv, -offY * inv, -offZ * inv).normalize();
+    const up = Math.abs(look.dot(UP)) > 0.999 ? ALT_UP : UP;
 
     this.camera.position.set(0, 0, 0);
-    const q = new Quaternion();
-    const m = lookRotation(look);
-    q.setFromRotationMatrix(m);
-    this.camera.quaternion.copy(q);
+    this.scratchMatrix.lookAt(ZERO, look, up);
+    this.scratchQuaternion.setFromRotationMatrix(this.scratchMatrix);
+    this.camera.quaternion.copy(this.scratchQuaternion);
 
-    this.camera.near = this.frame.near;
-    this.camera.far = this.frame.far;
-    this.camera.updateProjectionMatrix();
+    if (projectionChanged) {
+      this.camera.near = this.frame.near;
+      this.camera.far = this.frame.far;
+      this.camera.updateProjectionMatrix();
+    }
     this.camera.updateMatrixWorld(true);
   }
 
@@ -260,20 +317,15 @@ export class CameraController {
    * visible popping (22.3: "no disorienting teleport caused by changing frames").
    */
   private selectFrame(distanceMetres: number): ScaleFrame {
-    const frames: ScaleFrame[] = [
-      SCALE_FRAMES[0],
-      SCALE_FRAMES[1],
-      SCALE_FRAMES[2],
-      relativisticFrameFor(this.gravitationalRadius),
-      detailFrameFor(this.gravitationalRadius),
-    ];
-
-    const currentIdx = frames.findIndex((f) => f.id === this.frame.id);
+    const frames = this.frameCandidates;
     const idealUnits = 60;
 
+    let current: ScaleFrame | null = null;
     let best = frames[0];
     let bestErr = Infinity;
-    for (const f of frames) {
+    for (let i = 0; i < frames.length; i++) {
+      const f = frames[i];
+      if (f.id === this.frame.id) current = f;
       const units = distanceMetres / f.metresPerUnit;
       const err = Math.abs(Math.log(units / idealUnits));
       if (err < bestErr) {
@@ -282,11 +334,10 @@ export class CameraController {
       }
     }
 
-    if (currentIdx >= 0) {
-      const cur = frames[currentIdx];
-      const curUnits = distanceMetres / cur.metresPerUnit;
+    if (current) {
+      const curUnits = distanceMetres / current.metresPerUnit;
       // Stay put while the current frame remains usable.
-      if (curUnits > idealUnits * 0.14 && curUnits < idealUnits * 7) return cur;
+      if (curUnits > idealUnits * 0.14 && curUnits < idealUnits * 7) return current;
     }
     return best;
   }
@@ -300,29 +351,16 @@ export class CameraController {
   }
 
   setAspect(aspect: number): void {
+    if (Math.abs(this.camera.aspect - aspect) < 1e-12) return;
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
   }
 
   /** Distance from the camera to an absolute point, in metres. */
   distanceTo(p: Vec3): number {
-    return Math.hypot(
-      p[0] - this.originAbs[0],
-      p[1] - this.originAbs[1],
-      p[2] - this.originAbs[2],
-    );
+    const dx = p[0] - this.originAbs[0];
+    const dy = p[1] - this.originAbs[1];
+    const dz = p[2] - this.originAbs[2];
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
   }
-}
-
-import { Matrix4 } from 'three/webgpu';
-
-const UP = new Vector3(0, 1, 0);
-const ALT_UP = new Vector3(0, 0, 1);
-const scratchM = new Matrix4();
-
-function lookRotation(forward: Vector3): Matrix4 {
-  const f = forward.clone().normalize();
-  // Avoid a degenerate basis when looking straight up or down.
-  const up = Math.abs(f.dot(UP)) > 0.999 ? ALT_UP : UP;
-  return scratchM.lookAt(new Vector3(0, 0, 0), f, up);
 }

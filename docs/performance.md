@@ -111,3 +111,70 @@ Required acceptance evidence:
 
 Until that run passes, the correct status is **implemented but unverified on the
 reported failing machine**, not “performance fixed.”
+
+## Further performance refactor — 2026-08-20
+
+The crash-safe ceilings above remain hard limits. A second bounded refactor reduces
+work *inside* those limits without changing the physical lens model, simulation
+semantics, interaction language, or rewind/branch contract.
+
+### Adaptive full-screen lens resolution
+
+The static tier ceiling is now the maximum rather than the only runtime setting.
+A low-rate controller samples rendered frame throughput every two seconds:
+
+- below 18 FPS, drawing-buffer ratio drops immediately;
+- two consecutive samples below 28 FPS trigger a smaller reduction;
+- recovery requires ten consecutive samples at or above 52 FPS;
+- recovery is gradual and can never exceed the tier's crash-safe physical-pixel
+  ceiling;
+- a resize that permits a larger ceiling does not automatically raise quality;
+- hidden/BFCache time is excluded from the sample window;
+- the controller does not create another `requestAnimationFrame` or simulation
+  loop. It only changes framebuffer resolution when evidence warrants it.
+
+This is deliberately conservative. Resolution is the highest-leverage control for
+the full-screen geodesic fragment workload, so lowering it protects interaction
+responsiveness without swapping the lens for a fake screen-space distortion.
+
+### Allocation-free camera hot path
+
+`CameraController` no longer creates temporary `Vector3`, `Quaternion`, `Matrix4`,
+or dynamic scale-frame arrays during ordinary frame updates. It now:
+
+- reuses per-controller scratch objects;
+- caches relativistic/detail scale-frame objects until black-hole mass actually
+  changes;
+- skips camera-basis construction when free-flight input and residual velocity
+  are both absent;
+- uses inline squared-length math instead of `Math.hypot` in the flight hot path;
+- updates the projection matrix only when near/far or aspect actually changes.
+
+The camera behavior and floating-origin model are unchanged; this targets garbage
+collection pressure and repeated matrix work only.
+
+### Cached magnetic field-line topology
+
+Field-line rendering still derives from the same packed analytic `FieldSet` and
+RK4 tracer as the plasma solver. The expensive physical topology is now rebuilt
+only when field nodes, display density, or trace parameters change. Camera motion
+reprojects cached absolute vertices instead of repeatedly:
+
+- repacking field nodes for each sampled vertex;
+- RK4-tracing every line again;
+- reevaluating field magnitude for every line vertex.
+
+This preserves the requirement that the visible scaffold respond to the actual
+field model while removing redundant solver work from steady camera movement.
+
+### Validation state
+
+The new adaptive controller passed a direct executable harness covering critical
+slowdown, sustained slowdown, hard floors, cautious recovery, and resize ceiling
+changes. The modified camera, field-line, main-entry, and test sources passed
+focused TypeScript syntax checks; camera, field-line, and main integration also
+passed strict interface typechecks against their current contracts.
+
+These are implementation checks, **not measured frame-time evidence**. Full pinned
+repository tests/build/E2E and the matched visible-browser ten-minute stability run
+remain required before claiming the real-machine performance problem is resolved.

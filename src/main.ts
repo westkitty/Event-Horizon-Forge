@@ -4,6 +4,7 @@
  */
 
 import { App } from './app/App';
+import { AdaptiveResolutionController } from './app/AdaptiveResolution';
 import { safePixelRatioForTier } from './app/CapabilityProbe';
 import type { PersistentAction } from './ui/Overlay';
 
@@ -44,6 +45,13 @@ const ACTION_KEYS: Record<string, string> = {
   swap: 'KeyX',
   clean: 'KeyH',
 };
+
+const ADAPTIVE_SAMPLE_MS = 2_000;
+let adaptiveResolution: AdaptiveResolutionController | null = null;
+let adaptiveTimer: number | null = null;
+let lastAdaptiveSampleAt = 0;
+let lastAdaptiveFrameCount = 0;
+let lastAdaptiveFps: number | null = null;
 
 declare global {
   interface WindowEventMap {
@@ -119,17 +127,83 @@ function syncReducedMotion(): void {
   app.cameraRef.reducedMotion = reducedMotion.matches;
 }
 
-/**
- * App applies this cap during initial renderer creation through the quality
- * budget's renderScale. Re-apply it after a viewport resize because a window
- * can move to a much larger/HiDPI display after boot.
- */
-function syncSafeRenderResolution(): void {
+function hardPixelRatioCeiling(): number | null {
   const tier = app.capabilities.tier;
-  if (tier === 'unsupported') return;
-  const ratio = safePixelRatioForTier(tier, innerWidth, innerHeight, devicePixelRatio);
+  if (tier === 'unsupported') return null;
+  return safePixelRatioForTier(tier, innerWidth, innerHeight, devicePixelRatio);
+}
+
+function applyRenderRatio(ratio: number): void {
   app.rendererRef.setPixelRatio(ratio);
   app.rendererRef.setSize(innerWidth, innerHeight, false);
+}
+
+/**
+ * Re-apply the hard crash-safe ceiling after a viewport/DPR change. A larger
+ * viewport ceiling never promotes quality immediately: the adaptive controller
+ * keeps its lower earned ratio until sustained healthy frame throughput recovers.
+ */
+function syncSafeRenderResolution(): void {
+  const ceiling = hardPixelRatioCeiling();
+  if (ceiling === null) return;
+
+  if (!adaptiveResolution) {
+    adaptiveResolution = new AdaptiveResolutionController(ceiling);
+  } else {
+    adaptiveResolution.updateCeiling(ceiling);
+  }
+  applyRenderRatio(adaptiveResolution.ratio);
+}
+
+function readRenderedFrameCount(): number {
+  // App stores the first 2000 samples even outside debug mode. That gives the
+  // adaptive controller a zero-cost early counter; after saturation, use the
+  // existing summary's total frame counter at this low sampling frequency.
+  if (app.perf.length < 2_000) return app.perf.length;
+  return app.perfSummary()?.frames ?? app.perf.length;
+}
+
+function resetAdaptiveSampling(): void {
+  lastAdaptiveSampleAt = performance.now();
+  lastAdaptiveFrameCount = readRenderedFrameCount();
+}
+
+function sampleAdaptiveResolution(): void {
+  if (!adaptiveResolution || document.hidden) {
+    resetAdaptiveSampling();
+    return;
+  }
+
+  const now = performance.now();
+  const frameCount = readRenderedFrameCount();
+  const elapsedMs = now - lastAdaptiveSampleAt;
+  const frameDelta = frameCount - lastAdaptiveFrameCount;
+
+  if (lastAdaptiveSampleAt <= 0 || elapsedMs < 250 || frameDelta < 0) {
+    lastAdaptiveSampleAt = now;
+    lastAdaptiveFrameCount = frameCount;
+    return;
+  }
+
+  const fps = (frameDelta * 1_000) / elapsedMs;
+  lastAdaptiveFps = fps;
+  const change = adaptiveResolution.sample(fps);
+  if (change.changed) applyRenderRatio(change.ratio);
+
+  lastAdaptiveSampleAt = now;
+  lastAdaptiveFrameCount = frameCount;
+}
+
+function startAdaptiveResolution(): void {
+  if (adaptiveTimer !== null) return;
+  resetAdaptiveSampling();
+  adaptiveTimer = window.setInterval(sampleAdaptiveResolution, ADAPTIVE_SAMPLE_MS);
+}
+
+function stopAdaptiveResolution(): void {
+  if (adaptiveTimer === null) return;
+  window.clearInterval(adaptiveTimer);
+  adaptiveTimer = null;
 }
 
 app
@@ -141,9 +215,12 @@ app
     window.addEventListener('ehf:toggle-persistent-controls', onPersistentToggle);
     window.addEventListener('keyup', onInputStateKey);
     window.addEventListener('resize', syncSafeRenderResolution);
+    window.addEventListener('pageshow', resetAdaptiveSampling);
+    document.addEventListener('visibilitychange', resetAdaptiveSampling);
     reducedMotion.addEventListener('change', syncReducedMotion);
 
     app.start();
+    startAdaptiveResolution();
 
     window.__EHF__ = {
       app,
@@ -176,8 +253,12 @@ app
       const timer = window.setInterval(() => {
         const p = app.perfSummary();
         const caps = app.capabilities;
+        const adaptive = adaptiveResolution;
+        const quality = adaptive
+          ? `  render ${adaptive.ratio.toFixed(2)}x${lastAdaptiveFps === null ? '' : `  ${lastAdaptiveFps.toFixed(0)}fps`}`
+          : '';
         el.textContent = p
-          ? `tier ${caps.tier}  median ${p.median.toFixed(1)}ms  p95 ${p.p95.toFixed(1)}ms\n` +
+          ? `tier ${caps.tier}  median ${p.median.toFixed(1)}ms  p95 ${p.p95.toFixed(1)}ms${quality}\n` +
             `sim ${p.simMedian.toFixed(2)}ms  frames ${p.frames}  tick ${app.branchManager.active.state.tick}\n` +
             `chrome ${app.overlayRef.chromeCount()}`
           : 'sampling...';
@@ -208,9 +289,12 @@ window.addEventListener(
     // A page entering the back/forward cache is frozen rather than destroyed.
     // Keep page-lifetime listeners attached so they still work after restore.
     if (event.persisted) return;
+    stopAdaptiveResolution();
     window.removeEventListener('ehf:toggle-persistent-controls', onPersistentToggle);
     window.removeEventListener('keyup', onInputStateKey);
     window.removeEventListener('resize', syncSafeRenderResolution);
+    window.removeEventListener('pageshow', resetAdaptiveSampling);
+    document.removeEventListener('visibilitychange', resetAdaptiveSampling);
     reducedMotion.removeEventListener('change', syncReducedMotion);
   },
   { once: true },

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { AdaptiveResolutionController } from '../../src/app/AdaptiveResolution';
 import { Rng } from '../../src/core/rng';
 import {
   TIER_BUDGETS,
@@ -72,5 +73,51 @@ describe('crash-safety budgets', () => {
     // At 60 FPS rate 8 requests 16 ticks/frame, so the safety cap still allows
     // the intended fast-forward throughput on a healthy renderer.
     expect(fast.advance(0.25)).toBe(16);
+  });
+});
+
+describe('adaptive framebuffer quality', () => {
+  it('drops immediately on critical throughput and never below its safety floor', () => {
+    const q = new AdaptiveResolutionController(1, 1, { recoverSamples: 2 });
+    const first = q.sample(10);
+    expect(first.changed).toBe(true);
+    expect(first.reason).toBe('critical');
+    expect(q.ratio).toBeLessThan(1);
+
+    for (let i = 0; i < 20; i++) q.sample(5);
+    expect(q.ratio).toBeGreaterThanOrEqual(q.floorRatio);
+    expect(q.ratio).toBeCloseTo(q.floorRatio, 8);
+  });
+
+  it('requires sustained slow samples before a normal downgrade', () => {
+    const q = new AdaptiveResolutionController(0.8);
+    expect(q.sample(24).changed).toBe(false);
+    const second = q.sample(24);
+    expect(second.changed).toBe(true);
+    expect(second.reason).toBe('sustained-slow');
+    expect(q.ratio).toBeLessThan(0.8);
+  });
+
+  it('recovers cautiously but can never exceed the hard crash-safe ceiling', () => {
+    const q = new AdaptiveResolutionController(0.8, 0.5, { recoverSamples: 2, upscaleFactor: 1.5 });
+    expect(q.sample(60).changed).toBe(false);
+    expect(q.sample(60).reason).toBe('recovery');
+    expect(q.ratio).toBeGreaterThan(0.5);
+
+    for (let i = 0; i < 20; i++) q.sample(60);
+    expect(q.ratio).toBeLessThanOrEqual(0.8);
+    expect(q.ratio).toBeCloseTo(0.8, 8);
+  });
+
+  it('clamps immediately when a resize lowers the hard ceiling but does not auto-upscale when it rises', () => {
+    const q = new AdaptiveResolutionController(1, 0.7);
+    const lower = q.updateCeiling(0.5);
+    expect(lower.changed).toBe(true);
+    expect(q.ratio).toBe(0.5);
+
+    const higher = q.updateCeiling(1.5);
+    expect(higher.changed).toBe(false);
+    expect(q.ratio).toBe(0.5);
+    expect(q.ceilingRatio).toBe(1.5);
   });
 });

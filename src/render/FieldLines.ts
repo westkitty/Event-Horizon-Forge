@@ -2,14 +2,9 @@
  * Magnetic field-line visualisation (BUILD_SPEC 10.6, 20).
  *
  * Lines are produced by RK4-integrating the same analytic field the plasma
- * solver uses, from deterministic seed points, and are re-traced whenever a
- * node moves. That is the requirement in 25.18: "the visual scaffold must
- * derive from the actual field representation used by the solver" — hand-drawn
- * curves that merely look magnetic are explicitly prohibited (53: "field lines
- * that do not respond to field controls").
- *
- * Three display densities (20): minimal / flow / analysis. Depth fading and
- * importance culling keep the screen from turning into spaghetti (10.6).
+ * solver uses, from deterministic seed points. The expensive physical topology
+ * is cached until field nodes or display density change; camera motion only
+ * reprojects the cached absolute vertices into render space.
  */
 
 import {
@@ -21,7 +16,7 @@ import {
   LineSegments,
 } from 'three/webgpu';
 import { Fn, attribute, float, mix, uniform, vec3, vec4 } from 'three/tsl';
-import { traceFieldLine, totalFieldAt } from '../simulation/field';
+import { FieldSet, traceFieldLine } from '../simulation/field';
 import type { FieldNode, Vec3 } from '../simulation/state';
 
 export type FieldDisplayMode = 'off' | 'minimal' | 'flow' | 'analysis';
@@ -43,11 +38,18 @@ export class FieldLines {
   private readonly geometry: BufferGeometry;
   private readonly material: LineBasicNodeMaterial;
   private readonly positions: Float32Array;
+  /** Absolute traced positions in metres; retained until topology changes. */
+  private readonly absolutePositions: Float64Array;
   /** Per-vertex: x = normalised |B|, y = arclength fraction (flow direction). */
   private readonly attrs: Float32Array;
   private readonly traceBuf: Float64Array;
   private readonly maxLines: number;
   private readonly maxSteps: number;
+  private readonly fieldSet = new FieldSet();
+  private readonly b: Vec3 = [0, 0, 0];
+  private readonly renderTmp = new Float32Array(3);
+  private readonly seed: Vec3 = [0, 0, 0];
+  private topologyKey = '';
   private vertexCount = 0;
 
   readonly opacity = uniform(float(0.6));
@@ -61,6 +63,7 @@ export class FieldLines {
     // Two vertices per segment; (steps - 1) segments per line, both directions.
     const maxVerts = opts.maxLines * 2 * (opts.maxSteps - 1) * 2;
     this.positions = new Float32Array(maxVerts * 3);
+    this.absolutePositions = new Float64Array(maxVerts * 3);
     this.attrs = new Float32Array(maxVerts * 2);
     this.traceBuf = new Float64Array(opts.maxSteps * 3);
 
@@ -79,19 +82,11 @@ export class FieldLines {
     this.material.blending = AdditiveBlending;
 
     this.material.colorNode = Fn(() => {
-      // `as const` on the node type keeps the swizzle accessors typed; without
-      // it `attribute()` widens to AttributeNode<string> and loses .x/.y.
       const la = attribute('lineAttr', 'vec2' as const);
       const strength = la.x;
       const along = la.y;
 
-      // Direction cue: a travelling brightness pulse along the line. Motion,
-      // not colour, carries the direction, so the encoding is not colour-only
-      // (26: "no color-only meaning").
       const pulse = along.mul(6).sub(this.flowPhase).sin().mul(0.5).add(0.5).pow(3);
-
-      // Strength is also encoded redundantly as brightness, again so colour is
-      // never the sole channel.
       const cool = vec3(0.28, 0.42, 0.72);
       const hot = vec3(0.72, 0.86, 1.0);
       const col = mix(cool, hot, strength.clamp(0, 1));
@@ -106,9 +101,9 @@ export class FieldLines {
   }
 
   /**
-   * Re-traces every line. `toRender` converts absolute metres to camera-relative
-   * render units, so the lines share the floating-origin treatment of
-   * everything else.
+   * Refreshes line rendering. Physical RK4 tracing and per-vertex field-strength
+   * evaluation run only when the actual field topology/display density changes.
+   * Camera movement simply reprojects cached absolute vertices.
    */
   retrace(
     nodes: readonly FieldNode[],
@@ -120,41 +115,71 @@ export class FieldLines {
   ): void {
     if (this.mode === 'off' || nodes.length === 0) {
       this.vertexCount = 0;
+      this.topologyKey = '';
       this.geometry.setDrawRange(0, 0);
       this.lines.visible = false;
       return;
     }
 
+    const key = makeTopologyKey(this.mode, nodes, centre, seedRadius, boundsMetres, stepMetres);
+    const topologyChanged = key !== this.topologyKey;
+    if (topologyChanged) {
+      this.rebuildTopology(nodes, centre, seedRadius, boundsMetres, stepMetres);
+      this.topologyKey = key;
+      this.geometry.getAttribute('lineAttr').needsUpdate = true;
+    }
+
+    const tmp = this.renderTmp;
+    for (let v = 0; v < this.vertexCount; v++) {
+      const o = v * 3;
+      toRender(
+        this.absolutePositions[o],
+        this.absolutePositions[o + 1],
+        this.absolutePositions[o + 2],
+        tmp,
+        0,
+      );
+      this.positions[o] = tmp[0];
+      this.positions[o + 1] = tmp[1];
+      this.positions[o + 2] = tmp[2];
+    }
+
+    this.geometry.setDrawRange(0, this.vertexCount);
+    this.geometry.getAttribute('position').needsUpdate = true;
+    this.lines.visible = this.vertexCount > 0;
+  }
+
+  private rebuildTopology(
+    nodes: readonly FieldNode[],
+    centre: Vec3,
+    seedRadius: number,
+    boundsMetres: number,
+    stepMetres: number,
+  ): void {
     const lineCount = Math.min(
       this.maxLines,
       this.mode === 'analysis' ? this.maxLines : MODE_LINES[this.mode],
     );
 
+    const set = this.fieldSet.update(nodes);
+    const b = this.b;
+    set.evaluate(centre[0], centre[1], centre[2], b);
+    const refStrength = Math.max(1e-30, len3(b[0], b[1], b[2]));
+
     let v = 0;
-    const b: Vec3 = [0, 0, 0];
-    const scratch: Vec3 = [0, 0, 0];
-    const tmp = new Float32Array(3);
-
-    // Reference strength for normalising the brightness encoding.
-    totalFieldAt(nodes, centre[0], centre[1], centre[2], b, scratch);
-    const refStrength = Math.max(1e-30, Math.hypot(b[0], b[1], b[2]));
-
     for (let l = 0; l < lineCount; l++) {
-      // Deterministic seed points on a Fibonacci sphere around the plasma —
-      // stable across frames, so lines do not swim when nothing has changed.
+      // Deterministic seed points on a Fibonacci sphere around the plasma.
       const t = (l + 0.5) / lineCount;
       const inclination = Math.acos(1 - 2 * t);
       const azimuth = Math.PI * (1 + Math.sqrt(5)) * l;
-      const seed: Vec3 = [
-        centre[0] + seedRadius * Math.sin(inclination) * Math.cos(azimuth),
-        centre[1] + seedRadius * Math.cos(inclination),
-        centre[2] + seedRadius * Math.sin(inclination) * Math.sin(azimuth),
-      ];
+      this.seed[0] = centre[0] + seedRadius * Math.sin(inclination) * Math.cos(azimuth);
+      this.seed[1] = centre[1] + seedRadius * Math.cos(inclination);
+      this.seed[2] = centre[2] + seedRadius * Math.sin(inclination) * Math.sin(azimuth);
 
       for (const dir of [1, -1] as const) {
         const n = traceFieldLine(
-          nodes,
-          seed,
+          set,
+          this.seed,
           stepMetres,
           this.maxSteps,
           boundsMetres,
@@ -169,15 +194,13 @@ export class FieldLines {
             const x = this.traceBuf[idx * 3];
             const y = this.traceBuf[idx * 3 + 1];
             const z = this.traceBuf[idx * 3 + 2];
-            toRender(x, y, z, tmp, 0);
-            this.positions[v * 3] = tmp[0];
-            this.positions[v * 3 + 1] = tmp[1];
-            this.positions[v * 3 + 2] = tmp[2];
+            const o = v * 3;
+            this.absolutePositions[o] = x;
+            this.absolutePositions[o + 1] = y;
+            this.absolutePositions[o + 2] = z;
 
-            totalFieldAt(nodes, x, y, z, b, scratch);
-            const mag = Math.hypot(b[0], b[1], b[2]);
-            // Log-scaled: a dipole spans many decades and a linear map would
-            // make everything but the immediate vicinity of a node invisible.
+            set.evaluate(x, y, z, b);
+            const mag = len3(b[0], b[1], b[2]);
             this.attrs[v * 2] = Math.max(
               0,
               Math.min(1, 0.5 + Math.log10(mag / refStrength + 1e-30) * 0.35),
@@ -190,10 +213,6 @@ export class FieldLines {
     }
 
     this.vertexCount = v;
-    this.geometry.setDrawRange(0, v);
-    this.geometry.getAttribute('position').needsUpdate = true;
-    this.geometry.getAttribute('lineAttr').needsUpdate = true;
-    this.lines.visible = v > 0;
   }
 
   get drawnVertices(): number {
@@ -204,4 +223,24 @@ export class FieldLines {
     this.geometry.dispose();
     this.material.dispose();
   }
+}
+
+function makeTopologyKey(
+  mode: FieldDisplayMode,
+  nodes: readonly FieldNode[],
+  centre: Vec3,
+  seedRadius: number,
+  boundsMetres: number,
+  stepMetres: number,
+): string {
+  let key = `${mode}|${centre[0]},${centre[1]},${centre[2]}|${seedRadius}|${boundsMetres}|${stepMetres}`;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    key += `|${n.id}:${n.kind}:${n.enabled ? 1 : 0}:${n.position[0]},${n.position[1]},${n.position[2]}:${n.moment[0]},${n.moment[1]},${n.moment[2]}:${n.radius}`;
+  }
+  return key;
+}
+
+function len3(x: number, y: number, z: number): number {
+  return Math.sqrt(x * x + y * y + z * z);
 }
