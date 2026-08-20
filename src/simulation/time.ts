@@ -57,8 +57,14 @@ export class TimeController {
   readonly ticksPerSecond = 120;
 
   private accumulator = 0;
-  /** Guard against spiral-of-death after a tab stall or a long shader compile. */
-  private readonly maxTicksPerFrame = 8;
+  /**
+   * Default playback may catch up only far enough to preserve 120 ticks/s at
+   * 30 FPS. Intentional fast-forward gets the ticks it needs at a healthy 60
+   * FPS, but a stalled frame still cannot accumulate an arbitrarily large burst.
+   */
+  private maxTicksForCurrentRate(): number {
+    return Math.max(4, Math.ceil(2 * this.rate));
+  }
 
   /**
    * Converts elapsed real time into whole ticks. Returns how many to step.
@@ -71,10 +77,11 @@ export class TimeController {
     this.accumulator += clamped * this.ticksPerSecond * this.rate;
     let steps = Math.floor(this.accumulator);
     if (steps <= 0) return 0;
-    if (steps > this.maxTicksPerFrame) {
+    const maxTicksPerFrame = this.maxTicksForCurrentRate();
+    if (steps > maxTicksPerFrame) {
       // Drop the backlog rather than trying to catch up; catching up would make
-      // the simulation lurch and would not match a replay of the same commands.
-      steps = this.maxTicksPerFrame;
+      // input/render recovery harder and would not match a replay of wall time.
+      steps = maxTicksPerFrame;
       this.accumulator = 0;
     } else {
       this.accumulator -= steps;

@@ -4,6 +4,7 @@
  */
 
 import { App } from './app/App';
+import { safePixelRatioForTier } from './app/CapabilityProbe';
 import type { PersistentAction } from './ui/Overlay';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -118,13 +119,28 @@ function syncReducedMotion(): void {
   app.cameraRef.reducedMotion = reducedMotion.matches;
 }
 
+/**
+ * App applies this cap during initial renderer creation through the quality
+ * budget's renderScale. Re-apply it after a viewport resize because a window
+ * can move to a much larger/HiDPI display after boot.
+ */
+function syncSafeRenderResolution(): void {
+  const tier = app.capabilities.tier;
+  if (tier === 'unsupported') return;
+  const ratio = safePixelRatioForTier(tier, innerWidth, innerHeight, devicePixelRatio);
+  app.rendererRef.setPixelRatio(ratio);
+  app.rendererRef.setSize(innerWidth, innerHeight, false);
+}
+
 app
   .init()
   .then(() => {
     syncReducedMotion();
+    syncSafeRenderResolution();
     configurePersistentControls(app.overlayRef.prefs.persistentControls);
     window.addEventListener('ehf:toggle-persistent-controls', onPersistentToggle);
     window.addEventListener('keyup', onInputStateKey);
+    window.addEventListener('resize', syncSafeRenderResolution);
     reducedMotion.addEventListener('change', syncReducedMotion);
 
     app.start();
@@ -194,6 +210,7 @@ window.addEventListener(
     if (event.persisted) return;
     window.removeEventListener('ehf:toggle-persistent-controls', onPersistentToggle);
     window.removeEventListener('keyup', onInputStateKey);
+    window.removeEventListener('resize', syncSafeRenderResolution);
     reducedMotion.removeEventListener('change', syncReducedMotion);
   },
   { once: true },

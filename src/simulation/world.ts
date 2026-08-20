@@ -19,6 +19,7 @@ import { createBody, launchBody, stepBody, translateBody } from './body';
 import { createPlasma, stepPlasma } from './plasma';
 import {
   cloneWorld,
+  worldByteSize,
   type FieldNode,
   type SimEvent,
   type Vec3,
@@ -303,27 +304,39 @@ function normalise(v: Vec3): Vec3 {
 /* Checkpoints                                                                 */
 /* -------------------------------------------------------------------------- */
 
+export const DEFAULT_CHECKPOINT_INTERVAL_TICKS = 120;
+export const DEFAULT_CHECKPOINT_CAPACITY = 120;
+export const DEFAULT_CHECKPOINT_MEMORY_BYTES = 32 * 1024 * 1024;
+
 export interface Checkpoint {
   tick: number;
   state: WorldState;
   rngState: [number, number];
+  /** Approximate retained bytes of the deep-copied causal state. */
+  bytes: number;
 }
 
 /**
- * Ring buffer of periodic full snapshots (BUILD_SPEC 8.3.2).
+ * Periodic full snapshots for deterministic rewind (BUILD_SPEC 8.3.2).
  *
- * Rewind restores the nearest earlier checkpoint and replays forward, so the
- * checkpoint interval is a trade between memory and worst-case seek cost, not a
- * correctness parameter. Capacity is bounded so a long session cannot grow
- * without limit — an explicit requirement of 32.5 / 41.5.
+ * The old Gate 0 defaults retained up to 240 ~1.77 MB snapshots PER BRANCH,
+ * around 425 MB, and two live branches could double that. A count bound is not
+ * a meaningful memory bound when snapshot size varies with quality tier.
+ *
+ * This store therefore applies three limits:
+ * - one snapshot per second at the normal 120 tick/s rate by default;
+ * - a generous count ceiling for small worlds;
+ * - a hard approximate byte ceiling, keeping at least one checkpoint so rewind
+ *   never loses its reconstruction anchor entirely.
  */
 export class CheckpointStore {
   private ring: Checkpoint[] = [];
-  private cursor = 0;
+  private retainedBytesTotal = 0;
 
   constructor(
-    readonly intervalTicks = 30,
-    readonly capacity = 240,
+    readonly intervalTicks = DEFAULT_CHECKPOINT_INTERVAL_TICKS,
+    readonly capacity = DEFAULT_CHECKPOINT_CAPACITY,
+    readonly maxRetainedBytes = DEFAULT_CHECKPOINT_MEMORY_BYTES,
   ) {}
 
   shouldCapture(tick: number): boolean {
@@ -331,16 +344,25 @@ export class CheckpointStore {
   }
 
   capture(state: WorldState, rng: Rng): void {
+    const snapshot = cloneWorld(state);
     const cp: Checkpoint = {
       tick: state.tick,
-      state: cloneWorld(state),
+      state: snapshot,
       rngState: rng.saveState(),
+      bytes: worldByteSize(snapshot),
     };
-    if (this.ring.length < this.capacity) {
-      this.ring.push(cp);
-    } else {
-      this.ring[this.cursor] = cp;
-      this.cursor = (this.cursor + 1) % this.capacity;
+
+    this.ring.push(cp);
+    this.retainedBytesTotal += cp.bytes;
+
+    // Oldest-first eviction keeps time ordering obvious and ensures memory is
+    // actually released when the byte budget is reached.
+    while (
+      this.ring.length > 1 &&
+      (this.ring.length > this.capacity || this.retainedBytesTotal > this.maxRetainedBytes)
+    ) {
+      const removed = this.ring.shift();
+      if (removed) this.retainedBytesTotal -= removed.bytes;
     }
   }
 
@@ -354,24 +376,26 @@ export class CheckpointStore {
   }
 
   earliestTick(): number {
-    let min = Infinity;
-    for (const cp of this.ring) min = Math.min(min, cp.tick);
-    return min === Infinity ? 0 : min;
+    return this.ring.length ? this.ring[0].tick : 0;
   }
 
   /** Discards checkpoints after `tick`; used when a branch diverges. */
   truncateAfter(tick: number): void {
     this.ring = this.ring.filter((cp) => cp.tick <= tick);
-    this.cursor = this.ring.length % this.capacity;
+    this.retainedBytesTotal = this.ring.reduce((sum, cp) => sum + cp.bytes, 0);
   }
 
   get count(): number {
     return this.ring.length;
   }
 
+  get retainedBytes(): number {
+    return this.retainedBytesTotal;
+  }
+
   clear(): void {
     this.ring = [];
-    this.cursor = 0;
+    this.retainedBytesTotal = 0;
   }
 }
 

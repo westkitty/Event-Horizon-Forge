@@ -132,7 +132,11 @@ export class BranchManager {
     const rng = new Rng(parent.state.seed ^ (this.counter * 0x9e3779b9));
     rng.loadState(parent.rng.saveState());
 
-    const store = new CheckpointStore(parent.store.intervalTicks, parent.store.capacity);
+    const store = new CheckpointStore(
+      parent.store.intervalTicks,
+      parent.store.capacity,
+      parent.store.maxRetainedBytes,
+    );
     const state = cloneWorld(parent.state);
     state.branchId = id;
     store.capture(state, rng);

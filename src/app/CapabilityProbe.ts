@@ -1,12 +1,9 @@
 /**
- * Capability detection and tier selection (BUILD_SPEC 33).
+ * Capability detection and crash-safe quality selection (BUILD_SPEC 29.4, 32, 33).
  *
- * The contract is explicit that WebGPU compute must not be assumed to fall back
- * to WebGL 2 (13.1, 33, and the prohibited-shortcut "claiming WebGL fallback for
- * compute-only features that were never implemented there"). So this probe does
- * not merely ask "is WebGPU present" — it reads the adapter's actual limits and
- * feature set, and the tier it returns is what the quality manager and the
- * renderers branch on.
+ * WebGPU feature presence tells us which renderer path is available; it does not
+ * prove that an arbitrary visual workload is safe. Quality budgets therefore
+ * stay deliberately conservative until real frame-time evidence promotes them.
  */
 
 export type CapabilityTier = 'A' | 'B' | 'C' | 'unsupported';
@@ -91,6 +88,11 @@ export async function probeCapabilities(): Promise<Capabilities> {
   const tier = selectTier({ webgpu, webgl2: webgl2.ok, compute, storage3D, maxStorageBufferBytes });
   if (tier === 'C') notes.push('Running the WebGL 2 path: no compute, reduced particle counts.');
   if (tier === 'unsupported') notes.push('Neither WebGPU nor WebGL 2 is available.');
+  if (tier !== 'unsupported') {
+    notes.push(
+      `Crash-safe rendering cap: ${(MAX_PHYSICAL_PIXELS[tier] / 1_000_000).toFixed(2)} megapixels.`,
+    );
+  }
 
   return {
     tier,
@@ -147,52 +149,90 @@ function detectWebGL2(): { ok: boolean; maxTextureSize: number } {
   }
 }
 
-/** Per-tier population budgets (BUILD_SPEC 29.4). Measured, then tuned. */
+/** Per-tier population budgets. These are safety defaults, not measured maxima. */
 export interface QualityBudget {
   cloudTracers: number;
   plasmaSprites: number;
   bodyParticles: number;
   fieldLines: number;
   fieldLineSteps: number;
-  /** Geodesic integration steps in the lensing shader — the dominant cost. */
+  /** Geodesic integration steps in the lensing shader — the dominant pixel cost. */
   lensSteps: number;
   starfieldCubeSize: number;
+  /** Multiplier consumed by App's existing DPR calculation. */
   renderScale: number;
+  /** Hard startup/resizing target for the physical drawing buffer. */
+  maxPhysicalPixels: number;
   bloom: boolean;
+}
+
+const MAX_PHYSICAL_PIXELS: Record<Exclude<CapabilityTier, 'unsupported'>, number> = {
+  A: 650_000,
+  B: 450_000,
+  C: 300_000,
+};
+
+/**
+ * Returns a device-pixel ratio that cannot exceed the tier's physical pixel
+ * budget for the supplied viewport. This keeps a Retina/HiDPI display from
+ * multiplying an already-expensive full-screen geodesic shader by four.
+ */
+export function safePixelRatioForTier(
+  tier: Exclude<CapabilityTier, 'unsupported'>,
+  width = typeof innerWidth === 'number' ? innerWidth : 1920,
+  height = typeof innerHeight === 'number' ? innerHeight : 1080,
+  dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1,
+): number {
+  const cssPixels = Math.max(1, width) * Math.max(1, height);
+  const requested = Math.max(0.1, Math.min(2, Number.isFinite(dpr) ? dpr : 1));
+  const pixelBound = Math.sqrt(MAX_PHYSICAL_PIXELS[tier] / cssPixels);
+  return Math.min(requested, pixelBound);
+}
+
+/** App multiplies min(DPR, 2) by renderScale, so convert the hard pixel-ratio
+ * target back into the scale it already expects. */
+function initialRenderScale(tier: Exclude<CapabilityTier, 'unsupported'>): number {
+  const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+  const clampedDpr = Math.max(0.1, Math.min(2, Number.isFinite(dpr) ? dpr : 1));
+  return safePixelRatioForTier(tier) / clampedDpr;
 }
 
 export const TIER_BUDGETS: Record<Exclude<CapabilityTier, 'unsupported'>, QualityBudget> = {
   A: {
-    cloudTracers: 240_000,
-    plasmaSprites: 12_288,
-    bodyParticles: 24_576,
-    fieldLines: 48,
-    fieldLineSteps: 320,
-    lensSteps: 160,
-    starfieldCubeSize: 1024,
-    renderScale: 1,
-    bloom: true,
+    cloudTracers: 50_000,
+    plasmaSprites: 3_072,
+    bodyParticles: 6_144,
+    fieldLines: 20,
+    fieldLineSteps: 120,
+    lensSteps: 28,
+    starfieldCubeSize: 768,
+    get renderScale() { return initialRenderScale('A'); },
+    maxPhysicalPixels: MAX_PHYSICAL_PIXELS.A,
+    bloom: false,
   },
   B: {
-    cloudTracers: 120_000,
-    plasmaSprites: 8_192,
-    bodyParticles: 16_384,
-    fieldLines: 32,
-    fieldLineSteps: 220,
-    lensSteps: 110,
-    starfieldCubeSize: 768,
-    renderScale: 0.85,
-    bloom: true,
+    cloudTracers: 25_000,
+    plasmaSprites: 2_048,
+    bodyParticles: 4_096,
+    fieldLines: 16,
+    fieldLineSteps: 96,
+    lensSteps: 20,
+    starfieldCubeSize: 640,
+    get renderScale() { return initialRenderScale('B'); },
+    maxPhysicalPixels: MAX_PHYSICAL_PIXELS.B,
+    bloom: false,
   },
   C: {
-    cloudTracers: 48_000,
-    plasmaSprites: 4_096,
-    bodyParticles: 8_192,
-    fieldLines: 20,
-    fieldLineSteps: 140,
-    lensSteps: 64,
+    // App deliberately skips compute tracers on Tier C.
+    cloudTracers: 0,
+    plasmaSprites: 1_536,
+    bodyParticles: 3_072,
+    fieldLines: 10,
+    fieldLineSteps: 64,
+    lensSteps: 14,
     starfieldCubeSize: 512,
-    renderScale: 0.75,
+    get renderScale() { return initialRenderScale('C'); },
+    maxPhysicalPixels: MAX_PHYSICAL_PIXELS.C,
     bloom: false,
   },
 };
