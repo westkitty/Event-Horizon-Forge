@@ -4,12 +4,12 @@
 {
   "artifact_path": "",
   "current_baseline": {
-    "identity": "runtime baseline fa87d3e074f775a54ffc22adc2412787401063cf - Gate 0 prototype with UI/input regression repairs; governance revision 5 applied on main",
-    "last_verified": "2026-08-17",
-    "state": "current-baseline"
+    "identity": "runtime baseline ed223a403dd7e60cf2bbab2f7120ba5d05b779f2 - adaptive rendering and hot-path performance refactor; matched real-device stability pending",
+    "last_verified": "2026-08-20",
+    "state": "implemented-unverified"
   },
-  "delivery_state": "gate-0-built-ui-input-repaired-full-current-gate-pending",
-  "last_updated": "2026-08-18T04:28:57Z",
+  "delivery_state": "crash-safety-and-performance-refactor-implemented-real-device-verification-pending",
+  "last_updated": "2026-08-20T10:23:54Z",
   "linked_parent_state": null,
   "primary_artifact": "src/ Gate 0 prototype + BUILD_SPEC.md",
   "project_id": "event-horizon-forge",
@@ -20,7 +20,7 @@
     "Canonical repository westkitty/Event-Horizon-Forge",
     "Browser-first Event Horizon Forge simulation"
   ],
-  "state_revision": 5,
+  "state_revision": 6,
   "target_environment": "Browser-first TypeScript/Three.js; production expansion remains Gate-0-gated"
 }
 -->
@@ -34,10 +34,10 @@
 
 ## 2. Current Baseline
 
-- **Runtime application baseline:** `fa87d3e074f775a54ffc22adc2412787401063cf`; revision 5 changes governance only and leaves runtime code unchanged.
-- **Built:** Gate 0 prototype plus the August 16 UI/UX polish and August 17 UI/input repairs.
-- **Verified:** governance, historical deterministic simulation-core evidence, and bounded direct-Chromium UI/input repairs.
-- **Unverified on current main:** full tests/typecheck/build/E2E, rendered imagery, real frame time/GPU timing, Tier B/C, Safari/Firefox/mobile, and human Gate 0 review.
+- **Runtime application baseline:** `ed223a403dd7e60cf2bbab2f7120ba5d05b779f2` — adaptive rendering and hot-path performance refactor on top of the crash-safety baseline; matched real-device stability remains pending.
+- **Built:** Gate 0 prototype, August 16 UI/UX polish, August 17 UI/input repairs, August 20 crash-safety controls, adaptive framebuffer quality, allocation-free camera hot paths, and cached magnetic field-line topology.
+- **Verified:** governance, historical unchanged solver/RNG evidence, bounded direct-Chromium UI/input repairs, focused crash-safety logic checks, adaptive-resolution harness checks, and focused strict interface typechecks for the new performance paths.
+- **Unverified on current main:** full pinned tests/typecheck/build/E2E, the previously crashing visible-browser path, measured benefit of this refactor, rendered imagery, real frame-time/GPU timing, Tier B/C, Safari/Firefox/mobile, and human Gate 0 review.
 - **Gate verdict:** `INSUFFICIENT EVIDENCE`; production expansion remains gated.
 
 ## 3. Artifact Contract
@@ -122,30 +122,30 @@ Build the one-scene browser simulation governed by `BUILD_SPEC.md` and `docs/mas
 
 <!-- operational-state:entry
 {
-  "artifact_revision": "Gate 0 2026-08-12",
-  "capability": "Historical Gate 0 deterministic simulation-core tests passed for RNG, rewind/replay, field, Boris plasma, gravity, equilibrium, and tidal disruption.",
-  "evidence": "42 passing unit tests on the 2026-08-12 Gate 0 baseline; later UI/input repairs did not change solver/RNG/checkpoint code.",
-  "freshness": "Applicable until simulation-core code changes",
+  "artifact_revision": "Gate 0 2026-08-12; solver/RNG source unchanged through runtime commit 00b41e8dd19b7798cbd9eb085e124de9dc98d4e5",
+  "capability": "Historical Gate 0 deterministic solver/RNG physics tests passed for field, Boris plasma, gravity, equilibrium, and tidal disruption. This verified scope explicitly excludes the changed checkpoint-retention and wall-clock catch-up paths.",
+  "evidence": "42 passing unit tests on the 2026-08-12 Gate 0 baseline plus current diff inspection showing the physical solvers/RNG were not changed by the crash-safety repair.",
+  "freshness": "Applicable to unchanged solver/RNG physics only",
   "id": "VER-002",
   "last_verified": "2026-08-12",
-  "recheck_trigger": "Solver/RNG/checkpoint/command-order change",
-  "scope": "Simulation layer only",
+  "recheck_trigger": "Solver/RNG/command-application change",
+  "scope": "Simulation physics layer only; excludes checkpoint retention, rewind integration, wall-clock scheduling, and rendering",
   "state": "verified",
-  "title": "Simulation core is deterministic and physically validated",
-  "verification_method": "Historical bun run test"
+  "title": "Unchanged simulation physics core retains historical deterministic evidence",
+  "verification_method": "Historical bun run test plus source-scope comparison"
 }
 -->
-### VER-002 — Simulation core is deterministic and physically validated
+### VER-002 — Unchanged simulation physics core retains historical deterministic evidence
 
 - **State:** `verified`
-- **Artifact Revision:** Gate 0 2026-08-12
-- **Capability:** Historical Gate 0 deterministic simulation-core tests passed for RNG, rewind/replay, field, Boris plasma, gravity, equilibrium, and tidal disruption.
-- **Evidence:** 42 passing unit tests on the 2026-08-12 Gate 0 baseline; later UI/input repairs did not change solver/RNG/checkpoint code.
-- **Freshness:** Applicable until simulation-core code changes
+- **Artifact Revision:** Gate 0 2026-08-12; solver/RNG source unchanged through runtime commit 00b41e8dd19b7798cbd9eb085e124de9dc98d4e5
+- **Capability:** Historical Gate 0 deterministic solver/RNG physics tests passed for field, Boris plasma, gravity, equilibrium, and tidal disruption. This verified scope explicitly excludes the changed checkpoint-retention and wall-clock catch-up paths.
+- **Evidence:** 42 passing unit tests on the 2026-08-12 Gate 0 baseline plus current diff inspection showing the physical solvers/RNG were not changed by the crash-safety repair.
+- **Freshness:** Applicable to unchanged solver/RNG physics only
 - **Last Verified:** 2026-08-12
-- **Recheck Trigger:** Solver/RNG/checkpoint/command-order change
-- **Scope:** Simulation layer only
-- **Verification Method:** Historical bun run test
+- **Recheck Trigger:** Solver/RNG/command-application change
+- **Scope:** Simulation physics layer only; excludes checkpoint retention, rewind integration, wall-clock scheduling, and rendering
+- **Verification Method:** Historical bun run test plus source-scope comparison
 <!-- /operational-state:entry -->
 
 <!-- operational-state:entry
@@ -178,32 +178,86 @@ Build the one-scene browser simulation governed by `BUILD_SPEC.md` and `docs/mas
 
 ## 6. Known Not Working
 
-No unresolved confirmed runtime defect is currently recorded after the bounded August 17 repair sweep. Unknown and unverified behavior remains tracked below.
+The following catastrophic runtime failure is confirmed by user report. Repair code is implemented, but matched validation on the previously failing machine is still pending.
+
+<!-- operational-state:entry
+{
+  "affected_user_path": "Normal visible-browser startup and sustained playback",
+  "artifact_revision": "runtime baseline fa87d3e074f775a54ffc22adc2412787401063cf as carried by main before the 2026-08-20 repair",
+  "evidence": "Explicit user report 2026-08-20. Source inspection independently found unvalidated full-screen geodesic/DPR/particle load and checkpoint retention capable of extreme GPU and RAM pressure.",
+  "id": "BRK-001",
+  "observed_failure": "On the pre-repair runtime baseline, attempting to run Event Horizon Forge can crash the browser and make the entire host computer become impossibly slow.",
+  "required_repair": "Implemented in runtime commit 00b41e8dd19b7798cbd9eb085e124de9dc98d4e5: hard physical-pixel caps, substantially reduced default geodesic/particle budgets, 32 MiB checkpoint cap per branch, one-second default checkpoint interval, bounded stalled-frame catch-up, and resize-time pixel-cap enforcement.",
+  "required_validation": "Matched visible-browser run on the previously failing machine: responsive boot, at least ten minutes representative use, rewind/fork/compare, bounded checkpoint memory, and no browser/GPU/system stall.",
+  "severity": "critical",
+  "state": "known-broken",
+  "status": "repair-implemented-validation-pending",
+  "title": "Runtime can crash the browser and stall the host computer",
+  "workaround": "Do not use the pre-repair runtime baseline for normal play."
+}
+-->
+### BRK-001 — Runtime can crash the browser and stall the host computer
+
+- **State:** `known-broken`
+- **Affected User Path:** Normal visible-browser startup and sustained playback
+- **Artifact Revision:** runtime baseline fa87d3e074f775a54ffc22adc2412787401063cf as carried by main before the 2026-08-20 repair
+- **Evidence:** Explicit user report 2026-08-20. Source inspection independently found unvalidated full-screen geodesic/DPR/particle load and checkpoint retention capable of extreme GPU and RAM pressure.
+- **Observed Failure:** On the pre-repair runtime baseline, attempting to run Event Horizon Forge can crash the browser and make the entire host computer become impossibly slow.
+- **Required Repair:** Implemented in runtime commit 00b41e8dd19b7798cbd9eb085e124de9dc98d4e5: hard physical-pixel caps, substantially reduced default geodesic/particle budgets, 32 MiB checkpoint cap per branch, one-second default checkpoint interval, bounded stalled-frame catch-up, and resize-time pixel-cap enforcement.
+- **Required Validation:** Matched visible-browser run on the previously failing machine: responsive boot, at least ten minutes representative use, rewind/fork/compare, bounded checkpoint memory, and no browser/GPU/system stall.
+- **Severity:** critical
+- **Status:** repair-implemented-validation-pending
+- **Workaround:** Do not use the pre-repair runtime baseline for normal play.
+<!-- /operational-state:entry -->
 
 ## 7. Implemented but Unverified
 
 <!-- operational-state:entry
 {
-  "artifact_revision": "fa87d3e074f775a54ffc22adc2412787401063cf",
+  "artifact_revision": "ed223a403dd7e60cf2bbab2f7120ba5d05b779f2",
   "id": "UNV-001",
-  "implemented": "Gate 0 and repaired UI/input code exist on current main with regression coverage.",
-  "missing_evidence": "Pinned full-repository test, typecheck, build, and Vite-hosted E2E run on current main.",
-  "recheck_trigger": "Any source/dependency/build change",
-  "scope": "Current-main full application integration",
+  "implemented": "Gate 0, prior UI/input repairs, crash-safety controls, adaptive framebuffer quality, allocation-free camera hot paths, and cached field-line topology exist on current main.",
+  "missing_evidence": "Pinned full-repository unit tests, TypeScript build, Vite build/E2E, matched visible-browser stability on the user's failing machine, and measured before/after frame-time evidence for the refactor.",
+  "recheck_trigger": "Any source/dependency/build/performance-budget/render-loop/camera/field-line change",
+  "scope": "Current runtime full-application integration",
   "state": "implemented-unverified",
-  "title": "Current-main full application integration after UI/input repairs",
-  "validation_needed": "Run bun run test, bun run typecheck, bun run build, and bun run test:e2e."
+  "title": "Current runtime full application integration after performance refactor",
+  "validation_needed": "Run bun run test, bun run typecheck, bun run build, bun run test:e2e, then the matched visible-browser stability/performance run with frame-time distributions."
 }
 -->
-### UNV-001 — Current-main full application integration after UI/input repairs
+### UNV-001 — Current runtime full application integration after performance refactor
 
 - **State:** `implemented-unverified`
-- **Artifact Revision:** fa87d3e074f775a54ffc22adc2412787401063cf
-- **Implemented:** Gate 0 and repaired UI/input code exist on current main with regression coverage.
-- **Missing Evidence:** Pinned full-repository test, typecheck, build, and Vite-hosted E2E run on current main.
-- **Recheck Trigger:** Any source/dependency/build change
-- **Scope:** Current-main full application integration
-- **Validation Needed:** Run bun run test, bun run typecheck, bun run build, and bun run test:e2e.
+- **Artifact Revision:** ed223a403dd7e60cf2bbab2f7120ba5d05b779f2
+- **Implemented:** Gate 0, prior UI/input repairs, crash-safety controls, adaptive framebuffer quality, allocation-free camera hot paths, and cached field-line topology exist on current main.
+- **Missing Evidence:** Pinned full-repository unit tests, TypeScript build, Vite build/E2E, matched visible-browser stability on the user's failing machine, and measured before/after frame-time evidence for the refactor.
+- **Recheck Trigger:** Any source/dependency/build/performance-budget/render-loop/camera/field-line change
+- **Scope:** Current runtime full-application integration
+- **Validation Needed:** Run bun run test, bun run typecheck, bun run build, bun run test:e2e, then the matched visible-browser stability/performance run with frame-time distributions.
+<!-- /operational-state:entry -->
+
+<!-- operational-state:entry
+{
+  "artifact_revision": "ed223a403dd7e60cf2bbab2f7120ba5d05b779f2",
+  "id": "UNV-002",
+  "implemented": "Crash-safety controls remain in force and the runtime now also adapts framebuffer ratio downward from the hard ceiling on sustained low FPS, cautiously recovers only after sustained healthy throughput, removes transient Three.js allocations and redundant projection work from the camera hot path, and caches RK4 magnetic field-line topology so steady camera movement only reprojects vertices.",
+  "missing_evidence": "The decisive real-device path that previously crashed has not yet been rerun, full project dependencies are unavailable in this execution environment, and no matched before/after runtime profile has measured the new refactor.",
+  "recheck_trigger": "AdaptiveResolution, render-budget, lens, particle, checkpoint, branch, time-controller, renderer-resolution, CameraController, FieldLines, or device-tier change",
+  "scope": "GPU/CPU/RAM crash-safety and steady-frame performance controls",
+  "state": "implemented-unverified",
+  "title": "Crash-safety and steady-frame performance refactor is implemented",
+  "validation_needed": "Visible-browser ten-minute matched run with p50/p95/p99/max frame-time distribution, adaptive render ratio observations, browser/OS responsiveness, GPU/device-loss observation, and checkpoint-retained-byte checks."
+}
+-->
+### UNV-002 — Crash-safety and steady-frame performance refactor is implemented
+
+- **State:** `implemented-unverified`
+- **Artifact Revision:** ed223a403dd7e60cf2bbab2f7120ba5d05b779f2
+- **Implemented:** Crash-safety controls remain in force and the runtime now also adapts framebuffer ratio downward from the hard ceiling on sustained low FPS, cautiously recovers only after sustained healthy throughput, removes transient Three.js allocations and redundant projection work from the camera hot path, and caches RK4 magnetic field-line topology so steady camera movement only reprojects vertices.
+- **Missing Evidence:** The decisive real-device path that previously crashed has not yet been rerun, full project dependencies are unavailable in this execution environment, and no matched before/after runtime profile has measured the new refactor.
+- **Recheck Trigger:** AdaptiveResolution, render-budget, lens, particle, checkpoint, branch, time-controller, renderer-resolution, CameraController, FieldLines, or device-tier change
+- **Scope:** GPU/CPU/RAM crash-safety and steady-frame performance controls
+- **Validation Needed:** Visible-browser ten-minute matched run with p50/p95/p99/max frame-time distribution, adaptive render ratio observations, browser/OS responsiveness, GPU/device-loss observation, and checkpoint-retained-byte checks.
 <!-- /operational-state:entry -->
 
 ## 8. Unknown or Evidence-Stale State
@@ -301,25 +355,25 @@ No unresolved confirmed runtime defect is currently recorded after the bounded A
 <!-- operational-state:entry
 {
   "blocks_completion": true,
-  "dependency": "Human reviewer with a visible browser running current main",
+  "dependency": "Human-visible browser on the machine/browser that previously became unusable",
   "id": "PND-001",
   "priority": "highest",
-  "reason_pending": "Gate 0 is built, but decisive rendered-image, real-performance, and human-review evidence is absent.",
+  "reason_pending": "Gate 0 is built and a bounded crash-safety repair is implemented, but the reported catastrophic real-device failure has not yet been retested and rendered/performance evidence remains absent.",
   "state": "pending",
-  "task": "Open current main with ?debug, walk BUILD_SPEC 39.2, inspect against BUILD_SPEC 44, record frame timing, and issue GO / CONDITIONAL GO / NO-GO.",
-  "title": "Complete Gate 0 visible-browser review and verdict",
-  "validation_needed": "BUILD_SPEC 39.2/39.3 visual/performance/human review"
+  "task": "First run the repaired runtime on the previously failing machine and prove responsive boot plus ten minutes of representative use. If stable, continue BUILD_SPEC 39.2/39.3 visual/performance/human review and issue GO / CONDITIONAL GO / NO-GO.",
+  "title": "Verify crash-safety, then complete Gate 0 visible-browser verdict",
+  "validation_needed": "No browser/system stall; frame-time distribution; bounded checkpoint memory; rewind/fork/compare; BUILD_SPEC 39.2/39.3 visual/performance/human review"
 }
 -->
-### PND-001 — Complete Gate 0 visible-browser review and verdict
+### PND-001 — Verify crash-safety, then complete Gate 0 visible-browser verdict
 
 - **State:** `pending`
 - **Blocks Completion:** Yes
-- **Dependency:** Human reviewer with a visible browser running current main
+- **Dependency:** Human-visible browser on the machine/browser that previously became unusable
 - **Priority:** highest
-- **Reason Pending:** Gate 0 is built, but decisive rendered-image, real-performance, and human-review evidence is absent.
-- **Task:** Open current main with ?debug, walk BUILD_SPEC 39.2, inspect against BUILD_SPEC 44, record frame timing, and issue GO / CONDITIONAL GO / NO-GO.
-- **Validation Needed:** BUILD_SPEC 39.2/39.3 visual/performance/human review
+- **Reason Pending:** Gate 0 is built and a bounded crash-safety repair is implemented, but the reported catastrophic real-device failure has not yet been retested and rendered/performance evidence remains absent.
+- **Task:** First run the repaired runtime on the previously failing machine and prove responsive boot plus ten minutes of representative use. If stable, continue BUILD_SPEC 39.2/39.3 visual/performance/human review and issue GO / CONDITIONAL GO / NO-GO.
+- **Validation Needed:** No browser/system stall; frame-time distribution; bounded checkpoint memory; rewind/fork/compare; BUILD_SPEC 39.2/39.3 visual/performance/human review
 <!-- /operational-state:entry -->
 
 <!-- operational-state:entry
@@ -327,21 +381,21 @@ No unresolved confirmed runtime defect is currently recorded after the bounded A
   "blocks_completion": false,
   "id": "PND-002",
   "priority": "high",
-  "reason_pending": "Historical Gate 0 measurements identified bounded cost concerns.",
+  "reason_pending": "Crash-safe hard ceilings and a downward-first adaptive framebuffer controller are implemented, but real frame-time, adaptive-ratio behavior, simulation cost, and retained-memory behavior have not been measured on the target machine.",
   "state": "pending",
-  "task": "Reduce or reassess historical CPU simulation cost and checkpoint memory before production scale.",
-  "title": "Gate 0 carried conditions: CPU budget and checkpoint memory",
-  "validation_needed": "Re-measure on the current build after optimization."
+  "task": "Measure the current refactored baseline before increasing quality: record p50/p95/p99/max frame time, adaptive framebuffer ratio changes, checkpoint retained bytes, simulation cost, and camera/field-line interaction responsiveness. Only raise lens/particle budgets when matched evidence leaves safe headroom.",
+  "title": "Measure refactored resource budgets before any quality promotion",
+  "validation_needed": "Ten-minute matched performance/memory run with frame distribution, adaptive ratio history, simulation timing, and checkpoint retained bytes"
 }
 -->
-### PND-002 — Gate 0 carried conditions: CPU budget and checkpoint memory
+### PND-002 — Measure refactored resource budgets before any quality promotion
 
 - **State:** `pending`
 - **Blocks Completion:** No
 - **Priority:** high
-- **Reason Pending:** Historical Gate 0 measurements identified bounded cost concerns.
-- **Task:** Reduce or reassess historical CPU simulation cost and checkpoint memory before production scale.
-- **Validation Needed:** Re-measure on the current build after optimization.
+- **Reason Pending:** Crash-safe hard ceilings and a downward-first adaptive framebuffer controller are implemented, but real frame-time, adaptive-ratio behavior, simulation cost, and retained-memory behavior have not been measured on the target machine.
+- **Task:** Measure the current refactored baseline before increasing quality: record p50/p95/p99/max frame time, adaptive framebuffer ratio changes, checkpoint retained bytes, simulation cost, and camera/field-line interaction responsiveness. Only raise lens/particle budgets when matched evidence leaves safe headroom.
+- **Validation Needed:** Ten-minute matched performance/memory run with frame distribution, adaptive ratio history, simulation timing, and checkpoint retained bytes
 <!-- /operational-state:entry -->
 
 <!-- operational-state:entry
@@ -371,9 +425,9 @@ No unresolved confirmed runtime defect is currently recorded after the bounded A
 <!-- operational-state:entry
 {
   "authority": "Explicit user instruction + verified GitHub metadata",
-  "evidence": "GitHub confirms repository, default branch main, write permission, and runtime baseline fa87d3e074f775a54ffc22adc2412787401063cf before governance revision 5.",
+  "evidence": "GitHub confirmed westkitty/Event-Horizon-Forge, default branch main, write permission, and fast-forward delivery of performance-refactor runtime ed223a403dd7e60cf2bbab2f7120ba5d05b779f2 on 2026-08-20.",
   "id": "DEC-001",
-  "last_checked": "2026-08-18",
+  "last_checked": "2026-08-20",
   "recheck_trigger": "Git workflow change",
   "rule": "Use https://github.com/westkitty/Event-Horizon-Forge.git with main. Do not replace the repo, silently change origin, force-push, or overwrite governance without evidence.",
   "scope": "Git workflow",
@@ -387,13 +441,41 @@ No unresolved confirmed runtime defect is currently recorded after the bounded A
 
 - **State:** `current-baseline`
 - **Authority:** Explicit user instruction + verified GitHub metadata
-- **Evidence:** GitHub confirms repository, default branch main, write permission, and runtime baseline fa87d3e074f775a54ffc22adc2412787401063cf before governance revision 5.
-- **Last Checked:** 2026-08-18
+- **Evidence:** GitHub confirmed westkitty/Event-Horizon-Forge, default branch main, write permission, and fast-forward delivery of performance-refactor runtime ed223a403dd7e60cf2bbab2f7120ba5d05b779f2 on 2026-08-20.
+- **Last Checked:** 2026-08-20
 - **Recheck Trigger:** Git workflow change
 - **Rule:** Use https://github.com/westkitty/Event-Horizon-Forge.git with main. Do not replace the repo, silently change origin, force-push, or overwrite governance without evidence.
 - **Scope:** Git workflow
 - **Status:** active
 - **Validation Method:** Check repo identity, branch, head, and fast-forward status after writes.
+<!-- /operational-state:entry -->
+
+<!-- operational-state:entry
+{
+  "authority": "BUILD_SPEC performance budgets + 2026-08-20 catastrophic resource-failure evidence",
+  "evidence": "Current implementation keeps the 650k/450k/300k physical-pixel tier caps as hard ceilings and adds a downward-first adaptive framebuffer controller with hysteretic recovery.",
+  "id": "DEC-002",
+  "last_checked": "2026-08-20",
+  "recheck_trigger": "Adaptive-resolution, renderer-resolution, quality-tier, lens-budget, or performance-policy change",
+  "rule": "Treat tier physical-pixel limits as hard ceilings, not quality targets. Runtime adaptation may reduce resolution under load and may recover only gradually within the ceiling. Do not remove these guards or promote lens/particle quality without matched real-device performance evidence.",
+  "scope": "Performance quality policy",
+  "state": "current-baseline",
+  "status": "active",
+  "title": "Performance safety outranks unmeasured maximum quality",
+  "validation_method": "Matched visible-browser performance run must show responsive interaction and safe frame/memory behavior before any quality promotion."
+}
+-->
+### DEC-002 — Performance safety outranks unmeasured maximum quality
+
+- **State:** `current-baseline`
+- **Authority:** BUILD_SPEC performance budgets + 2026-08-20 catastrophic resource-failure evidence
+- **Evidence:** Current implementation keeps the 650k/450k/300k physical-pixel tier caps as hard ceilings and adds a downward-first adaptive framebuffer controller with hysteretic recovery.
+- **Last Checked:** 2026-08-20
+- **Recheck Trigger:** Adaptive-resolution, renderer-resolution, quality-tier, lens-budget, or performance-policy change
+- **Rule:** Treat tier physical-pixel limits as hard ceilings, not quality targets. Runtime adaptation may reduce resolution under load and may recover only gradually within the ceiling. Do not remove these guards or promote lens/particle quality without matched real-device performance evidence.
+- **Scope:** Performance quality policy
+- **Status:** active
+- **Validation Method:** Matched visible-browser performance run must show responsive interaction and safe frame/memory behavior before any quality promotion.
 <!-- /operational-state:entry -->
 
 ## 11. Validation and Evidence Matrix
@@ -406,21 +488,27 @@ No unresolved confirmed runtime defect is currently recorded after the bounded A
 | VER-002 | verified | Re-run after simulation-core change |
 | VER-003 | evidence-stale | Re-run current E2E |
 | VER-004 | verified | Recheck after UI/input lifecycle change |
-| UNV-001 | implemented-unverified | tests + typecheck + build + E2E |
+| BRK-001 | known-broken | Matched repaired visible-browser run with no browser/system stall |
+| UNV-001 | implemented-unverified | tests + typecheck + build + E2E + matched stability run |
+| UNV-002 | implemented-unverified | Ten-minute failing-machine run with frame/adaptive-ratio/memory evidence |
 | UNK-001 | unknown | visible-browser render inspection |
 | UNK-002 | unknown | visible ?debug frame timing |
 | UNK-003 | unknown | forced tiers + browser/device matrix |
-| PND-001 | pending | BUILD_SPEC 39.2/39.3 review |
-| PND-002 | pending | re-measure after optimization |
+| PND-001 | pending | Crash-safety verification, then BUILD_SPEC 39.2/39.3 review |
+| PND-002 | pending | Measure refactored frame/adaptive-ratio/sim/memory budgets before quality promotion |
 | PND-003 | pending | visible lens-compositing comparison |
 | DEC-001 | current-baseline | repo/head verification |
+| DEC-002 | current-baseline | matched performance proof before quality promotion |
 
 ## 12. Current Change Scope and Impact Radius
 
-- **Allowed now:** bounded defect repair, evidence/test work, governance correction, and Gate 0 evidence collection.
-- **Protected:** build-contract intent, screen-first interaction, scientific-fidelity boundaries, canonical repository/branch, and unaffected verified simulation-core evidence.
-- **Before current main is called fully verified:** run repository tests/typecheck/build/E2E and the visible-browser visual/performance/human Gate 0 review.
-- **Revision 5:** state/governance repair only; no runtime application source changes.
+- **Allowed now:** crash-safety validation, bounded evidence-led performance repair, repository test/build evidence, and Gate 0 evidence collection.
+- **Protected:** real null-geodesic lensing, one-universe simulation architecture, rewind/fork/compare semantics, screen-first interaction, scientific-fidelity boundaries, canonical repository/branch, and unaffected solver/RNG behavior.
+- **Current runtime:** `ed223a403dd7e60cf2bbab2f7120ba5d05b779f2` retains the crash-safety ceilings and adds adaptive framebuffer reduction/recovery, allocation-free camera frame work, and cached field-line topology/reprojection.
+- **Performance guardrail:** adaptive resolution may only operate within the existing crash-safe hard ceiling; quality promotion requires matched real-device evidence.
+- **Before the crash is called fixed:** rerun the previously failing visible-browser path and observe responsive boot plus at least ten minutes of representative use without browser/GPU/system stall.
+- **Before this performance refactor is called an improvement:** capture matched before/after p50/p95/p99/max frame timing and observe adaptive ratio behavior on a visible target browser.
+- **Before current main is called fully verified:** additionally run repository tests/typecheck/build/E2E and the BUILD_SPEC 39.2/39.3 visual/performance/human Gate 0 review.
 
 ## 13. Compact Revision Log
 
@@ -442,3 +530,14 @@ No unresolved confirmed runtime defect is currently recorded after the bounded A
 - Added VER-004 for bounded UI/input runtime proof and UNV-001 for the unrun full current-main application gate.
 - Preserved visual, performance, fallback, cross-browser/mobile, and human-review unknowns.
 - No application runtime code changed.
+
+### Revision 6 — 2026-08-20T10:23:54Z
+
+- **Artifact/source identity:** performance-refactor runtime `ed223a403dd7e60cf2bbab2f7120ba5d05b779f2` delivered on main
+- **State deltas:** Promoted the user-reported catastrophic runtime failure into BRK-001; narrowed VER-002 to unaffected historical solver/RNG scope; updated UNV-001/UNV-002 for crash-safety plus adaptive/camera/field-line performance work; updated PND-001/PND-002; added DEC-002; refreshed validation matrix and impact radius.
+- **New evidence:** Explicit user report on 2026-08-20 that the pre-repair runtime crashed the browser and stalled the host; source inspection of crash-inducing render/checkpoint load; focused crash-safety tests; direct adaptive-resolution executable harness; strict interface typechecks for AdaptiveResolution, CameraController, FieldLines, and main integration; source-level refactor preserving the physical lens and field model.
+- **Newly verified behavior:** None promoted to end-to-end runtime verified; focused implementation checks passed only within their bounded scopes.
+- **Newly known failure:** BRK-001 remains known-broken until matched repaired visible-browser validation passes.
+- **New decision:** DEC-002 makes crash-safe pixel caps hard ceilings and requires matched evidence before quality promotion.
+- **Validation not performed:** Full pinned project unit/typecheck/build/E2E commands remain unavailable in this container because repository dependencies are absent and outbound package/GitHub DNS access is blocked; no matched visible-browser before/after performance profile; no ten-minute real-device stability run.
+- **Summary:** Record catastrophic resource failure, preserve crash-safe caps, and add adaptive framebuffer, allocation-free camera, and cached field-topology performance controls without weakening simulation fidelity.
